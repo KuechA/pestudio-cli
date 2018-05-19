@@ -2,6 +2,7 @@ import pepy
 import xml.etree.ElementTree as ET
 import argparse
 import hashlib
+import prettytable
 
 class PeAnalyzer:
 	def __init__(self, file):
@@ -67,6 +68,26 @@ class PeAnalyzer:
 		
 		return matches
 
+	def showAllResources(self):
+		# Get languages from file
+		langs = ET.parse("xml/languages.xml").getroot().find('languages')
+		languages = {}
+		for lang in langs:
+			languages[int(lang.attrib['id'], 16)] = lang.text
+		
+		# We could also get the type from translations.xml xml/resources, they differ sometimes
+		table = prettytable.PrettyTable()
+		table.field_names = ["Type", "Name", "MD5", "Language"]
+		for resource in self.peFile.get_resources():
+			type = resource.type_as_str()
+			name = resource.name_str if resource.name_str else resource.name
+			md5 = hashlib.md5(resource.data).hexdigest()
+			language = languages[resource.lang]
+			table.add_row([type, name, md5, language])
+		
+		print(table)
+		
+
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='PE file analyzer')
 	parser.add_argument("-f", "--file", help="The file to analyze", required=True, dest="file")
@@ -84,3 +105,5 @@ if __name__ == "__main__":
 	blacklistedResources = peAnalyzer.blacklistedResources()
 	print("Blacklisted resources found: " + str(blacklistedResources) if len(blacklistedResources) > 0 else "No blacklisted resources found")
 	# TODO: Check resource types and corresponding thresholds in thresholds.xml
+	
+	peAnalyzer.showAllResources()
