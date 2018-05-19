@@ -1,6 +1,7 @@
 import pepy
 import xml.etree.ElementTree as ET
 import argparse
+import hashlib
 
 class PeAnalyzer:
 	def __init__(self, file):
@@ -28,8 +29,7 @@ class PeAnalyzer:
 		TODO: Support the imphashes
 		'''
 		imports = [{'lib': i.name.lower(), 'fct': i.sym} for i in self.peFile.get_imports()]
-		tree = ET.parse("xml/functions.xml")
-		root = tree.getroot()
+		root = ET.parse("xml/functions.xml").getroot()
 		
 		# Get all the blacklisted functions and libraries by name
 		suspiciousFunctions = []
@@ -44,13 +44,43 @@ class PeAnalyzer:
 		
 		return suspiciousFunctions, imports
 
+	def blacklistedResources(self):
+		'''
+		Parses the xml/resources.xml file and returns the list of blacklisted resources that
+		are used by the PE file to analyze.
+		'''
+		# Get the MD5 of resources used by the PE file
+		resourceMD5 = [hashlib.md5(r.data).hexdigest().upper() for r in self.peFile.get_resources()]
+		
+		# Get the program name from translations file
+		translations = ET.parse("xml/translations.xml").getroot().find('knownResources')
+		dict = {}
+		for t in translations:
+			dict[t.attrib['id']] = t.text
+		
+		# Get the blacklisted MD5 hashes and which ones are used in the PE file
+		resources = ET.parse("xml/resources.xml").getroot().find('resources')
+		matches = []
+		for r in resources:
+			if r.text in resourceMD5:
+				matches.append(dict[r.attrib['id']])
+		
+		return matches
+
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='PE file analyzer')
 	parser.add_argument("-f", "--file", help="The file to analyze", required=True, dest="file")
 	args = parser.parse_args()
 	
 	peAnalyzer = PeAnalyzer(args.file)
+	
 	suspicious, imp = peAnalyzer.checkImportNumber()
 	print("Number of imports is as expected" if suspicious else "Suspicious number of imports (%d)" % imp)
-	blacklisted, imports = peAnalyzer.blacklistedImports()
-	print("%d out of %d imports are blacklisted" % (len(blacklisted), len(imports)))
+	
+	blacklistedImports, imports = peAnalyzer.blacklistedImports()
+	print("%d out of %d imports are blacklisted" % (len(blacklistedImports), len(imports)))
+	# TODO: The blacklisted lib/fct can be found in features.xml to get a text description of what it does
+	
+	blacklistedResources = peAnalyzer.blacklistedResources()
+	print("Blacklisted resources found: " + str(blacklistedResources) if len(blacklistedResources) > 0 else "No blacklisted resources found")
+	# TODO: Check resource types and corresponding thresholds in thresholds.xml
