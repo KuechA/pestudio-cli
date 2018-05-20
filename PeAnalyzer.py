@@ -3,6 +3,9 @@ import xml.etree.ElementTree as ET
 import argparse
 import hashlib
 import prettytable
+import time
+import datetime
+import constants
 
 class PeAnalyzer:
 	def __init__(self, file):
@@ -76,6 +79,7 @@ class PeAnalyzer:
 			languages[int(lang.attrib['id'], 16)] = lang.text
 		
 		# We could also get the type from translations.xml xml/resources, they differ sometimes
+		# + in translations.xml we have a "severity" value
 		table = prettytable.PrettyTable()
 		table.field_names = ["Type", "Name", "MD5", "Language"]
 		for resource in self.peFile.get_resources():
@@ -86,7 +90,37 @@ class PeAnalyzer:
 			table.add_row([type, name, md5, language])
 		
 		print(table)
+	
+	def printHeaderInformation(self):
+		table = prettytable.PrettyTable()
+		table.field_names = ["Property", "Value"]
+		table.align["Property"] = "l"
+		table.align["Value"] = "l"
 		
+		signature = self.peFile.signature
+		table.add_row(["Signature", hex(signature)])
+		machine = self.peFile.machine
+		table.add_row(["Machine", constants.MACHINE_TYPE[machine]])
+		sections = self.peFile.numberofsections
+		table.add_row(["Number of sections", sections])
+		timeDateStamp = datetime.datetime.fromtimestamp(self.peFile.timedatestamp)
+		if timeDateStamp > datetime.datetime.now():
+			# The compile date is in the future
+			table.add_row(["timeDateStamp", constants.RED + str(timeDateStamp) + constants.RESET])
+		else:
+			table.add_row(["timeDateStamp", timeDateStamp])
+		pointerToSymbolTable = self.peFile.pointertosymboltable
+		table.add_row(["pointerToSymbolTable", pointerToSymbolTable])
+		numberOfSymbols = self.peFile.numberofsymbols
+		table.add_row(["numberOfSymbols", numberOfSymbols])
+		sizeOfOptionalHeader = self.peFile.sizeofoptionalheader
+		table.add_row(["sizeOfOptionalHeader", sizeOfOptionalHeader])
+		characteristics = self.peFile.characteristics
+		table.add_row(["characteristics", characteristics])
+		PE32 = (self.peFile.magic == 267)
+		table.add_row(["Processor 32-bit", PE32])
+		print("File Header:")
+		print(table)
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='PE file analyzer')
@@ -107,3 +141,5 @@ if __name__ == "__main__":
 	# TODO: Check resource types and corresponding thresholds in thresholds.xml
 	
 	peAnalyzer.showAllResources()
+	
+	peAnalyzer.printHeaderInformation()
