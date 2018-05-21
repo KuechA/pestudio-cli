@@ -30,13 +30,10 @@ def checkFile(args):
 
 	if args.virusTotal:
 		vt = VirusTotalClient(args.file)
-		resource = vt.sendRequest()
-		if resource is not None:
-			report = vt.getReport(resource)
-			if args.xml:
-				root = vt.getXmlReport(report, root)
-			else:
-				print(vt.printReport(report))
+		if args.xml:
+			root = vt.getXmlReport(root)
+		else:
+			print(vt.printReport())
 	
 	peAnalyzer = PeAnalyzer(args.file)
 	
@@ -47,19 +44,16 @@ def checkFile(args):
 			peAnalyzer.printHeaderInformation()
 	
 	if args.imports:
-		blacklistedImports, imports = peAnalyzer.blacklistedImports()
-		
 		if args.xml:
-			suspicious, imp = peAnalyzer.checkImportNumber()
-			root = peAnalyzer.getImportXml(blacklistedImports, imports, root)
+			root = peAnalyzer.getImportXml(root)
 		else:
-			peAnalyzer.printImportInformation(blacklistedImports, imports, suspicious)
+			peAnalyzer.printImportInformation()
 	
 	if args.resources:
 		blacklistedResources = peAnalyzer.blacklistedResources()
 		
 		if args.xml:
-			root = peAnalyzer.addResourcesXml(blacklistedResources, root)
+			root = peAnalyzer.addResourcesXml(root)
 		else:
 			print("Blacklisted resources found: " + str(blacklistedResources) if len(blacklistedResources) > 0 else "No blacklisted resources found")
 			# TODO: Check resource types and corresponding thresholds in thresholds.xml
@@ -68,11 +62,10 @@ def checkFile(args):
 	
 	if args.signatures:
 		matcher = SignatureMatcher(args.file)
-		signatures, maxSize = matcher.getSignatures()
-		packers = matcher.findPackers(signatures, maxSize)
+		packers = matcher.findPackers()
 		
 		if args.xml:
-			matcher.addPackersXml(packers, root)
+			root = matcher.addPackersXml(root)
 		else:
 			if len(packers):
 				print(constants.RED + "The signature of the following packer was found: " + str(packers) + constants.RESET)

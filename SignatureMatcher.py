@@ -22,35 +22,37 @@ class SignatureMatcher:
 		Parses signature.xml file to extract the signature names and patterns
 		'''
 		sigs = ET.parse("xml/signatures.xml").getroot().find('sigs')
-		signatures = []
-		maxSize = 0
+		self.signatures = []
+		self.maxSize = 0
 		for sig in sigs.findall('sig'):
 			name = sig.find('text').text
 			signature = sig.find('pattern').text
 			signature = re.sub(r"\s+", "", signature)
 			signature = signature.replace("x", ".").lower()
-			if len(signature) > maxSize:
-				maxSize = len(signature)
+			if len(signature) > self.maxSize:
+				self.maxSize = len(signature)
 			ep = sig.find('ep').text == 'true'
-			signatures.append(Signature(name, signature, ep))
-		return signatures, maxSize
+			self.signatures.append(Signature(name, signature, ep))
+		return self.signatures, self.maxSize
 
-	def findPackers(self, signatures, maxSize):
+	def findPackers(self):
 		'''
 		Scans the PE file for signatures we use to find packers
 		'''
-		matches = []
+		self.getSignatures()
+		
+		self.matches = []
 		for sect in self.peFile.get_sections():
 			if sect.length:
-				sectStart = str(binascii.hexlify(sect.data[:maxSize]))[2:-1]
-				for signature in signatures:
+				sectStart = str(binascii.hexlify(sect.data[:self.maxSize]))[2:-1]
+				for signature in self.signatures:
 					if re.match(signature.sig, sectStart):
-						matches.append(signature.name)
-		return matches
+						self.matches.append(signature.name)
+		return self.matches
 	
-	def addPackersXml(self, matches, root):
+	def addPackersXml(self, root):
 		packers = ET.SubElement(root, "Packers")
-		for match in matches:
+		for match in self.matches:
 			packer = ET.SubElement(packers, "packer")
 			packer.text = match
 		
@@ -63,8 +65,7 @@ if __name__ == "__main__":
 	args = parser.parse_args()
 	
 	matcher = SignatureMatcher(args.file)
-	signatures, maxSize = matcher.getSignatures()
-	packers = matcher.findPackers(signatures, maxSize)
+	packers = matcher.findPackers()
 	if len(packers):
 		print("The signature of the following packer was found: ", packers)
 	else:

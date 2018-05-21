@@ -21,7 +21,7 @@ class PeAnalyzer:
 		min = int(root.find('thresholds').find('minimums').find('Imports').text)
 		max = int(root.find('thresholds').find('maximums').find('Imports').text)
 		real = len(self.peFile.get_imports())
-		return min < real < max, real
+		return min < real < max
 
 	def __read_groups(self):
 		root = ET.parse("xml/translations.xml").getroot()
@@ -39,37 +39,43 @@ class PeAnalyzer:
 		TODO: Support the families
 		TODO: Support the imphashes
 		'''
-		imports = [{'lib': i.name.lower(), 'fct': i.sym} for i in self.peFile.get_imports()]
+		self.imports = [{'lib': i.name.lower(), 'fct': i.sym} for i in self.peFile.get_imports()]
 		root = ET.parse("xml/functions.xml").getroot()
 		
 		groups = self.__read_groups()
 		
 		# Get all the blacklisted functions and libraries by name
-		suspiciousFunctions = []
+		self.suspiciousFunctions = []
 		for lib in root.find('libs').findall('lib'):
 			if lib.find('fcts') is None:
-				f = list(filter(lambda i: i['lib'] == lib.attrib['name'], imports))
+				f = list(filter(lambda i: i['lib'] == lib.attrib['name'], self.imports))
 				for function in f:
 					function['group'] = groups[lib.attrib['group']]
-				suspiciousFunctions += f
+				self.suspiciousFunctions += f
 				continue
 			for fct in lib.find('fcts'):
-				f = list(filter(lambda i: i['lib'] == lib.attrib['name'] and i['fct'] == fct.text, imports))
+				f = list(filter(lambda i: i['lib'] == lib.attrib['name'] and i['fct'] == fct.text, self.imports))
 				for function in f:
 					function['group'] = groups[fct.attrib['group']]
-				suspiciousFunctions += f
+				self.suspiciousFunctions += f
 		
-		return suspiciousFunctions, imports
+		return self.suspiciousFunctions, self.imports
 
-	def printImportInformation(self, blacklistedImports, imports, suspicious):
-		print("Number of imports is in a reasonable range (%d)" % len(imports) if suspicious else constants.RED + "Suspicious number of imports (%d)" % len(imports) + constants.RESET)
+	def printImportInformation(self):
+		self.blacklistedImports()
 		
-		if len(blacklistedImports):
-			print(constants.RED + "The following %d out of %d imports are blacklisted:" % (len(blacklistedImports), len(imports)) + constants.RESET)
+		reasonableNumber = self.checkImportNumber()
+		if reasonableNumber:
+			print("Number of imports is in a reasonable range (%d)" % len(self.imports))
+		else:
+			print(constants.RED + "Suspicious number of imports (%d)" % len(self.imports) + constants.RESET)
+		
+		if len(self.suspiciousFunctions):
+			print(constants.RED + "The following %d out of %d imports are blacklisted:" % (len(self.suspiciousFunctions), len(self.imports)) + constants.RESET)
 			table = prettytable.PrettyTable()
 			table.field_names = ["Library", "Function", "Group"]
 			
-			for imp in blacklistedImports:
+			for imp in self.suspiciousFunctions:
 				table.add_row([imp['lib'], imp['fct'], imp['group']])
 			
 			resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
@@ -77,17 +83,19 @@ class PeAnalyzer:
 		else:
 			print("None of the imports is blacklisted.")
 
-	def getImportXml(self, blacklistedImports, imp, root):
+	def getImportXml(self, root):
+		self.blacklistedImports()
+		
 		imports = ET.SubElement(root, "Imports")
 		summary = ET.SubElement(imports, "summary")
-		ET.SubElement(summary, "blacklisted").text = str(len(blacklistedImports))
-		ET.SubElement(summary, "total").text = str(len(imp))
+		ET.SubElement(summary, "blacklisted").text = str(len(self.suspiciousFunctions))
+		ET.SubElement(summary, "total").text = str(len(self.imports))
 		blacklisted = ET.SubElement(imports, "blacklisted")
-		for impB in blacklistedImports:
+		for imp in self.suspiciousFunctions:
 			fct = ET.SubElement(blacklisted, "function")
-			fct.set("library", impB['lib'])
-			fct.set("group", impB['group'])
-			fct.text = impB['fct']
+			fct.set("library", imp['lib'])
+			fct.set("group", imp['group'])
+			fct.text = imp['fct']
 		
 		return root
 
@@ -107,28 +115,32 @@ class PeAnalyzer:
 		
 		# Get the blacklisted MD5 hashes and which ones are used in the PE file
 		resources = ET.parse("xml/resources.xml").getroot().find('resources')
-		matches = []
+		self.blacklistedRes = []
 		for r in resources:
 			if r.text in resourceMD5:
-				matches.append(dict[r.attrib['id']])
+				self.blacklistedRes.append(dict[r.attrib['id']])
 		
-		return matches
+		return self.blacklistedRes
 
-	def addResourcesXml(self, blacklistedResources, root):
-		resources = ET.SubElement(root, "Resources")
-		summary = ET.SubElement(resources, "summary")
-		ET.SubElement(summary, "blacklisted").text = str(len(blacklistedResources))
-		ET.SubElement(summary, "total").text = str(len(self.peFile.get_resources()))
-		
-		blacklisted = ET.SubElement(resources, "blacklisted")
-		for res in blacklistedResources:
-			fct = ET.SubElement(blacklisted, "resource-type")
-			fct.text = res
-		
+	def __get_languages(self):
 		langs = ET.parse("xml/languages.xml").getroot().find('languages')
 		languages = {}
 		for lang in langs:
 			languages[int(lang.attrib['id'], 16)] = lang.text
+		return languages
+
+	def addResourcesXml(self, root):
+		resources = ET.SubElement(root, "Resources")
+		summary = ET.SubElement(resources, "summary")
+		ET.SubElement(summary, "blacklisted").text = str(len(self.blacklistedRes))
+		ET.SubElement(summary, "total").text = str(len(self.peFile.get_resources()))
+		
+		blacklisted = ET.SubElement(resources, "blacklisted")
+		for res in self.blacklistedRes:
+			fct = ET.SubElement(blacklisted, "resource-type")
+			fct.text = res
+		
+		languages = self.__get_languages()
 		
 		allResources = ET.SubElement(resources, "resource-list")
 		for resource in self.peFile.get_resources():
@@ -146,13 +158,10 @@ class PeAnalyzer:
 
 	def showAllResources(self):
 		# Get languages from file
-		langs = ET.parse("xml/languages.xml").getroot().find('languages')
-		languages = {}
-		for lang in langs:
-			languages[int(lang.attrib['id'], 16)] = lang.text
+		languages = self.__get_languages()
 		
 		# We could also get the type from translations.xml xml/resources, they differ sometimes
-		# + in translations.xml we have a "severity" value
+		# and in translations.xml we have a "severity" value
 		table = prettytable.PrettyTable()
 		table.field_names = ["Type", "Name", "MD5", "Language"]
 		for resource in self.peFile.get_resources():
@@ -228,19 +237,11 @@ if __name__ == "__main__":
 	parser.add_argument("-f", "--file", help="The file to analyze", required=True, dest="file")
 	args = parser.parse_args()
 	
-	peAnalyzer = PeAnalyzer(args.file)
-	
-	suspicious, imp = peAnalyzer.checkImportNumber()
-	print("Number of imports is as expected" if suspicious else "Suspicious number of imports (%d)" % imp)
-	
-	blacklistedImports, imports = peAnalyzer.blacklistedImports()
-	print("%d out of %d imports are blacklisted" % (len(blacklistedImports), len(imports)))
-	# TODO: The blacklisted lib/fct can be found in features.xml to get a text description of what it does
-	
+	peAnalyzer = PeAnalyzer(args.file)	
+	peAnalyzer.printImportInformation()
 	blacklistedResources = peAnalyzer.blacklistedResources()
 	print("Blacklisted resources found: " + str(blacklistedResources) if len(blacklistedResources) > 0 else "No blacklisted resources found")
 	# TODO: Check resource types and corresponding thresholds in thresholds.xml
-	
 	peAnalyzer.showAllResources()
 	
 	peAnalyzer.printHeaderInformation()
