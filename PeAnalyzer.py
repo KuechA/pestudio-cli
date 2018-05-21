@@ -61,6 +61,36 @@ class PeAnalyzer:
 		
 		return suspiciousFunctions, imports
 
+	def printImportInformation(self, blacklistedImports, imports, suspicious):
+		print("Number of imports is in a reasonable range (%d)" % len(imports) if suspicious else constants.RED + "Suspicious number of imports (%d)" % len(imports) + constants.RESET)
+		
+		if len(blacklistedImports):
+			print(constants.RED + "The following %d out of %d imports are blacklisted:" % (len(blacklistedImports), len(imports)) + constants.RESET)
+			table = prettytable.PrettyTable()
+			table.field_names = ["Library", "Function", "Group"]
+			
+			for imp in blacklistedImports:
+				table.add_row([imp['lib'], imp['fct'], imp['group']])
+			
+			resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
+			print(resultString)
+		else:
+			print("None of the imports is blacklisted.")
+
+	def getImportXml(self, blacklistedImports, imp, root):
+		imports = ET.SubElement(root, "Imports")
+		summary = ET.SubElement(imports, "summary")
+		ET.SubElement(summary, "blacklisted").text = str(len(blacklistedImports))
+		ET.SubElement(summary, "total").text = str(len(imp))
+		blacklisted = ET.SubElement(imports, "blacklisted")
+		for impB in blacklistedImports:
+			fct = ET.SubElement(blacklisted, "function")
+			fct.set("library", impB['lib'])
+			fct.set("group", impB['group'])
+			fct.text = impB['fct']
+		
+		return root
+
 	def blacklistedResources(self):
 		'''
 		Parses the xml/resources.xml file and returns the list of blacklisted resources that
@@ -84,6 +114,36 @@ class PeAnalyzer:
 		
 		return matches
 
+	def addResourcesXml(self, blacklistedResources, root):
+		resources = ET.SubElement(root, "Resources")
+		summary = ET.SubElement(resources, "summary")
+		ET.SubElement(summary, "blacklisted").text = str(len(blacklistedResources))
+		ET.SubElement(summary, "total").text = str(len(self.peFile.get_resources()))
+		
+		blacklisted = ET.SubElement(resources, "blacklisted")
+		for res in blacklistedResources:
+			fct = ET.SubElement(blacklisted, "resource-type")
+			fct.text = res
+		
+		langs = ET.parse("xml/languages.xml").getroot().find('languages')
+		languages = {}
+		for lang in langs:
+			languages[int(lang.attrib['id'], 16)] = lang.text
+		
+		allResources = ET.SubElement(resources, "resource-list")
+		for resource in self.peFile.get_resources():
+			type = resource.type_as_str()
+			name = resource.name_str if resource.name_str else resource.name
+			md5 = hashlib.md5(resource.data).hexdigest()
+			language = languages[resource.lang]
+			res = ET.SubElement(allResources, "resource")
+			res.set("type", type)
+			res.set("name", hex(name))
+			res.set("language", language)
+			res.text = md5
+		
+		return root
+
 	def showAllResources(self):
 		# Get languages from file
 		langs = ET.parse("xml/languages.xml").getroot().find('languages')
@@ -97,14 +157,37 @@ class PeAnalyzer:
 		table.field_names = ["Type", "Name", "MD5", "Language"]
 		for resource in self.peFile.get_resources():
 			type = resource.type_as_str()
-			name = resource.name_str if resource.name_str else resource.name
+			name = resource.name_str if resource.name_str else hex(resource.name)
 			md5 = hashlib.md5(resource.data).hexdigest()
 			language = languages[resource.lang]
 			table.add_row([type, name, md5, language])
 		
 		resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
 		print(resultString)
-	
+
+	def addHeaderInformationXml(self, root):
+		header = ET.SubElement(root, "FileHeader")
+		signature = ET.SubElement(header, "signature")
+		signature.text = hex(self.peFile.signature)
+		machine = ET.SubElement(header, "machine")
+		machine.text = constants.MACHINE_TYPE[self.peFile.machine]
+		sections = ET.SubElement(header, "numberOfSections")
+		sections.text = hex(self.peFile.numberofsections)
+		timeDateStamp = ET.SubElement(header, "numberOfSections")
+		timeDateStamp.text = str(datetime.datetime.fromtimestamp(self.peFile.timedatestamp))
+		pointerToSymbolTable = ET.SubElement(header, "pointerToSymbolTable")
+		pointerToSymbolTable.text = hex(self.peFile.pointertosymboltable)
+		numberOfSymbols = ET.SubElement(header, "numberOfSymbols")
+		numberOfSymbols.text = str(self.peFile.numberofsymbols)
+		sizeOfOptionalHeader = ET.SubElement(header, "sizeOfOptionalHeader")
+		sizeOfOptionalHeader.text = str(self.peFile.sizeofoptionalheader)
+		characteristics = ET.SubElement(header, "characteristics")
+		characteristics.text = hex(self.peFile.characteristics)
+		PE32 = ET.SubElement(header, "PE32")
+		PE32.text = str(self.peFile.magic == 267)
+		
+		return root
+
 	def printHeaderInformation(self):
 		table = prettytable.PrettyTable()
 		table.field_names = ["Property", "Value"]
@@ -124,7 +207,7 @@ class PeAnalyzer:
 		else:
 			table.add_row(["timeDateStamp", timeDateStamp])
 		pointerToSymbolTable = self.peFile.pointertosymboltable
-		table.add_row(["pointerToSymbolTable", pointerToSymbolTable])
+		table.add_row(["pointerToSymbolTable", hex(pointerToSymbolTable)])
 		numberOfSymbols = self.peFile.numberofsymbols
 		table.add_row(["numberOfSymbols", numberOfSymbols])
 		sizeOfOptionalHeader = self.peFile.sizeofoptionalheader

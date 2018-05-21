@@ -47,7 +47,16 @@ class SignatureMatcher:
 					if re.match(signature.sig, sectStart):
 						matches.append(signature.name)
 		return matches
+	
+	def addPackersXml(self, matches, root):
+		packers = ET.SubElement(root, "Packers")
+		for match in matches:
+			packer = ET.SubElement(packers, "packer")
+			packer.text = match
+		
+		return root
 
+	
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='PE file analyzer')
 	parser.add_argument("-f", "--file", help="The file to analyze", required=True, dest="file")

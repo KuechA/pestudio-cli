@@ -5,6 +5,7 @@ import argparse
 import os
 import prettytable
 import re
+import xml.etree.ElementTree as ET
 
 FORMAT = '%(asctime)-15s %(message)s' 
 logging.basicConfig(format=FORMAT)
@@ -43,17 +44,35 @@ class VirusTotalClient:
 			logger.warning("Sent: %s, HTTP: %d", os.path.basename(self.file), res.status_code)
 			return None
 
-	def parseReport(self, report, showPositiveResults = True):
+	def printReport(self, report, showPositiveResults = True):
 		resultString = "VirusTotal result: " + str(report['positives']) + " of " + str(report['total']) + " tests are positive\n"
 		if showPositiveResults and not report['positives'] == 0:
 			table = prettytable.PrettyTable()
 			table.field_names = ["Engine", "Version", "Result"]
 			for test, result in report["scans"].items():
 				if result['detected']:
-					table.add_row([test, version, result['result']])
+					table.add_row([test, result['version'], result['result']])
 		
 			resultString += str(re.sub(r'(^|\n)', r'\1\t', str(table)))
 		return resultString
+	
+	def getXmlReport(self, report, root, showPositiveResouts = True):
+		vtRes = ET.SubElement(root, "VirusTotal")
+		summary = ET.SubElement(vtRes, "summary")
+		positives = ET.SubElement(summary, "positives")
+		positives.text = str(report['positives'])
+		total = ET.SubElement(summary, "total")
+		total.text = str(report['total'])
+		
+		# Show all the results from virus total
+		details = ET.SubElement(vtRes, "details")
+		for test, result in report["scans"].items():
+			res = ET.SubElement(details, "test-result")
+			res.set("engine", test)
+			res.set("version", result['version'])
+			res.text = str(result['result'])
+		
+		return root
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='Virustotal File Scan')
