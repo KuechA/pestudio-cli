@@ -180,10 +180,14 @@ class PeAnalyzer:
 		return languages
 
 	def addResourcesXml(self, root):
+		if self.resources is None:
+			self.__getResources()
+		if self.blacklistedRes is None:
+			self.blacklistedResources()
 		resources = ET.SubElement(root, "Resources")
 		summary = ET.SubElement(resources, "summary")
 		ET.SubElement(summary, "blacklisted").text = str(len(self.blacklistedRes))
-		ET.SubElement(summary, "total").text = str(len(self.peFile.get_resources()))
+		ET.SubElement(summary, "total").text = str(len(self.resources))
 		
 		blacklisted = ET.SubElement(resources, "blacklisted")
 		for res in self.blacklistedRes:
@@ -196,14 +200,19 @@ class PeAnalyzer:
 		for resource in self.resources:
 			name = resource.name #resource.name_str if resource.name_str else hex(esource.name)
 			res = ET.SubElement(allResources, "resource")
-			res.set("type", resource.type)
-			res.set("name", resource.name)
+			res.set("type", str(resource.type))
+			res.set("name", str(resource.name))
 			res.set("language", languages[resource.language])
 			res.text = resource.md5.hexdigest().upper()
 		
 		return root
 
 	def showAllResources(self):
+		if self.resources is None:
+			self.__getResources()
+		if self.blacklistedRes is None:
+			self.blacklistedResources()
+		
 		# Get languages from file
 		languages = self.__get_languages()
 		
@@ -225,24 +234,23 @@ class PeAnalyzer:
 	def addHeaderInformationXml(self, root):
 		header = ET.SubElement(root, "FileHeader")
 		signature = ET.SubElement(header, "signature")
-		if self.peFile.has_signature:
-			signature.text = hex(self.peFile.signature)
+		signature.text = "".join(["{0:02x}".format(x) for x in self.peFile.header.signature])
 		machine = ET.SubElement(header, "machine")
-		machine.text = constants.MACHINE_TYPE[self.peFile.machine_type]
+		machine.text = constants.MACHINE_TYPE[self.peFile.header.machine]
 		sections = ET.SubElement(header, "numberOfSections")
-		sections.text = hex(self.peFile.numberof_sections)
+		sections.text = hex(self.peFile.header.numberof_sections)
 		timeDateStamp = ET.SubElement(header, "numberOfSections")
-		timeDateStamp.text = str(datetime.datetime.fromtimestamp(self.peFile.time_date_stamps))
+		timeDateStamp.text = str(datetime.datetime.fromtimestamp(self.peFile.header.time_date_stamps))
 		pointerToSymbolTable = ET.SubElement(header, "pointerToSymbolTable")
-		pointerToSymbolTable.text = hex(self.peFile.pointerto_symbol_table)
+		pointerToSymbolTable.text = hex(self.peFile.header.pointerto_symbol_table)
 		numberOfSymbols = ET.SubElement(header, "numberOfSymbols")
-		numberOfSymbols.text = str(self.peFile.numberof_symbols)
+		numberOfSymbols.text = str(self.peFile.header.numberof_symbols)
 		sizeOfOptionalHeader = ET.SubElement(header, "sizeOfOptionalHeader")
-		sizeOfOptionalHeader.text = str(self.peFile.sizeof_optional_header)
+		sizeOfOptionalHeader.text = str(self.peFile.header.sizeof_optional_header)
 		characteristics = ET.SubElement(header, "characteristics")
-		characteristics.text = hex(self.peFile.characteristics)
+		characteristics.text = hex(self.peFile.header.characteristics)
 		PE32 = ET.SubElement(header, "PE32")
-		PE32.text = str(self.peFile.magic == 267)
+		PE32.text = str(self.peFile.dos_header.magic == 267)
 
 		return root
 
@@ -279,6 +287,20 @@ class PeAnalyzer:
 			print("File Header:")
 		resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
 		print(resultString)
+
+	def addTLSXml(self, root):
+		tls = ET.SubElement(root, "TlsCallbacks")
+		if not self.peFile.has_tls:
+			return
+		callback_elem = ET.SubElement(tls, "callback-addr")
+		table_entry_address = self.peFile.tls.addressof_callbacks
+		callback = self.peFile.get_content_from_virtual_address(table_entry_address, 4)
+		callback = '0x' + "".join(["{0:02x}".format(x) for x in callback[::-1]])
+		while int(callback, 16) !=0:
+			callback_elem.text = callback
+			table_entry_address +=4
+			callback = self.peFile.get_content_from_virtual_address(table_entry_address, 4)
+			callback = '0x' + "".join(["{0:02x}".format(x) for x in callback])
 
 	def printTLS(self):
 		if not self.peFile.has_tls:

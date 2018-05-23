@@ -15,6 +15,7 @@ def parseCommandLineArguments():
 	parser.add_argument("-f", "--file", help="The file to analyze", required=False, dest="file")
 	parser.add_argument("-v", "--virusTotal", help="Submit the file to virus total and get their score.", action="store_true", dest="virusTotal")
 	parser.add_argument("--header", help="Show information from header.", action="store_true", dest="header")
+	parser.add_argument("-t", "--tlsCallbacks", help="Show addresses of TLS callbacks.", action="store_true", dest="tls")
 	parser.add_argument("-i", "--imports", help="Check the imports against known malicious functions.", action="store_true", dest="imports")
 	parser.add_argument("-r", "--resources", help="Check the resources for blacklisted values.", action="store_true", dest="resources")
 	parser.add_argument("-s", "--signatures", help="Check for known signatures (e.g. packers).", action="store_true", dest="signatures")
@@ -23,6 +24,7 @@ def parseCommandLineArguments():
 
 def interactiveMode():
 	print("No file has been specified. Entering interactive mode...")
+	print("Not supported yet :(")
 
 def checkFile(args):
 	if args.xml:
@@ -42,6 +44,12 @@ def checkFile(args):
 			peAnalyzer.addHeaderInformationXml(root)
 		else:
 			peAnalyzer.printHeaderInformation()
+	
+	if args.tls:
+		if args.xml:
+			peAnalyzer.addTLSXml(root)
+		else:
+			peAnalyzer.printTLS()
 	
 	if args.imports:
 		if args.xml:
@@ -73,7 +81,7 @@ def checkFile(args):
 				print("No packer signature was found in the PE file")
 	
 	if args.xml:
-		print(ET.tostring(root))
+		print(ET.tostring(root).decode('utf-8'))
 	
 
 if __name__ == "__main__":
