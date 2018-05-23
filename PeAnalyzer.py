@@ -211,11 +211,11 @@ class PeAnalyzer:
 		table = prettytable.PrettyTable()
 		table.field_names = ["Type", "Name", "MD5", "Language"]
 		for resource in self.resources:
-			type = resource.type
+			res_type = resource.type
 			name = resource.name
 			md5 = resource.md5
 			language = resource.language
-			table.add_row([type, name, md5.hexdigest().upper(), languages[language]])
+			table.add_row([constants.RES_TO_STR(res_type), name, md5.hexdigest().upper(), languages[language]])
 		
 		resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
 		print(resultString)

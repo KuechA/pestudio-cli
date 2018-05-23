@@ -99,8 +99,8 @@ __RESOURCE_TYPE = {
 	'66': "any"
 }
 
-def RES_TO_STR(int x):
-	return __RESOURCE_TYPE.get(str(x), "UNK")
+def RES_TO_STR(x):
+	return __RESOURCE_TYPE.get(str(x), "Unknown")
 
 RED   = "\033[1;31m"  
 BLUE  = "\033[1;34m"
