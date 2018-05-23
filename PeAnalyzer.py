@@ -7,6 +7,7 @@ import time
 import datetime
 import constants
 import re
+import string
 
 class Import:
 	def __init__(self, lib, fct):
@@ -24,7 +25,7 @@ class Resource:
 		self.name = name
 		self.language = language
 		self.md5 = md5
-
+		
 	def __str__(self):
 		return str(self.name) + " of type " + str(self.type) + ", language " + str(self.language) + " has md5 " + str(self.md5)
 
@@ -34,6 +35,7 @@ class PeAnalyzer:
 
 	def __init__(self, file):
 		self.peFile = lief.parse(file)
+		self.strings = None
 
 	def __getImports(self):
 		self.imports = []
@@ -142,7 +144,8 @@ class PeAnalyzer:
 				for resource in resourceType.childs:
 					for lang in resource.childs:
 						name = resource.name if resource.has_name else hex(resource.id)
-						self.resources.append(Resource(resourceType.id, name, lang.id, hashlib.md5(bytes(lang.content))))
+						md5 = hashlib.md5(bytes(lang.content))
+						self.resources.append(Resource(resourceType.id, name, lang.id, md5))
 		
 		return self.resources
 
@@ -293,8 +296,38 @@ class PeAnalyzer:
 			table_entry_address +=4
 			callback = self.peFile.get_content_from_virtual_address(table_entry_address, 4)
 			callback = '0x' + "".join(["{0:02x}".format(x) for x in callback])
+	
+	def searchAllStrings(self):
+		pattern = re.compile(r"[A-Za-z0-9]{4,}")
+		ranges = ((ord('A'), ord('Z')), (ord('a'), ord('z')), (ord('0'), ord('9')))
+		self.strings = []
+		print(string.printable)
+		for sect in self.peFile.sections:
+			s = ""
+			for byte in sect.content:
+				if chr(byte) in string.printable:
+					s += chr(byte)
+				else:
+					if len(s) > 3:
+						self.strings.append(s)
+					s = ""
+	
+	def printAllStrings(self):
+		if self.strings is None:
+			self.searchAllStrings()
+		for s in self.strings:
+			print(s)
+	
+	def addAllStringsXml(self, root):
+		if self.strings is None:
+			self.searchAllStrings()
+		
+		strings = ET.SubElement(root, "Strings")
+		for s in self.strings:
+			ET.SubElement(strings, "str").text = s
 			
-			
+		return root
+
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='PE file analyzer')
 	parser.add_argument("-f", "--file", help="The file to analyze", required=True, dest="file")
@@ -307,6 +340,8 @@ if __name__ == "__main__":
 	# TODO: Check resource types and corresponding thresholds in thresholds.xml
 	
 	peAnalyzer.showAllResources()
-	
 	peAnalyzer.printHeaderInformation()
 	peAnalyzer.printTLS()
+	peAnalyzer.printAllStrings()
+	
+	
