@@ -1,4 +1,4 @@
-import pepy
+import lief
 import xml.etree.ElementTree as ET
 import argparse
 import hashlib
@@ -8,19 +8,39 @@ import datetime
 import constants
 import re
 
+class Import:
+	def __init__(self, lib, fct):
+		self.lib = lib
+		self.fct = fct
+		self.blacklisted = False
+		self.group = None
+
+	def __str__(self):
+		return self.lib + ": " + self.fct + ", blacklisted: " + str(self.blacklisted) + " with group: " + str(self.group)
+
 class PeAnalyzer:
+	imports = None
+
 	def __init__(self, file):
-		self.peFile = pepy.parse(file)
+		self.peFile = lief.parse(file)
+
+	def __getImports(self):
+		self.imports = []
+		for i in self.peFile.imports:
+			for e in i.entries:
+				self.imports.append(Import(i.name.lower(), e.name))
 
 	def checkImportNumber(self):
 		'''
 		Extract the min/max number of imports and check if the number of imports in the PE
 		file is in that range
 		'''
+		if self.imports is None:
+			self.__getImports()
 		root = ET.parse("xml/thresholds.xml").getroot()
 		min = int(root.find('thresholds').find('minimums').find('Imports').text)
 		max = int(root.find('thresholds').find('maximums').find('Imports').text)
-		real = len(self.peFile.get_imports())
+		real = len(self.imports)
 		return min < real < max
 
 	def __read_groups(self):
@@ -39,7 +59,8 @@ class PeAnalyzer:
 		TODO: Support the families
 		TODO: Support the imphashes
 		'''
-		self.imports = [{'lib': i.name.lower(), 'fct': i.sym} for i in self.peFile.get_imports()]
+		if self.imports is None:
+			self.__getImports()
 		root = ET.parse("xml/functions.xml").getroot()
 		
 		groups = self.__read_groups()
@@ -48,21 +69,22 @@ class PeAnalyzer:
 		self.suspiciousFunctions = []
 		for lib in root.find('libs').findall('lib'):
 			if lib.find('fcts') is None:
-				f = list(filter(lambda i: i['lib'] == lib.attrib['name'], self.imports))
+				f = list(filter(lambda i: i.lib == lib.attrib['name'], self.imports))
 				for function in f:
-					function['group'] = groups[lib.attrib['group']]
+					function.group = groups[lib.attrib['group']]
+					function.blacklisted = True
 				self.suspiciousFunctions += f
 				continue
 			for fct in lib.find('fcts'):
-				f = list(filter(lambda i: i['lib'] == lib.attrib['name'] and i['fct'] == fct.text, self.imports))
+				f = list(filter(lambda i: i.lib == lib.attrib['name'] and i.fct == fct.text, self.imports))
 				for function in f:
-					function['group'] = groups[fct.attrib['group']]
+					function.group = groups[fct.attrib['group']]
+					function.blacklisted = True
 				self.suspiciousFunctions += f
 		
 		return self.suspiciousFunctions, self.imports
 
 	def printImportInformation(self):
-		self.blacklistedImports()
 		
 		reasonableNumber = self.checkImportNumber()
 		if reasonableNumber:
@@ -70,13 +92,14 @@ class PeAnalyzer:
 		else:
 			print(constants.RED + "Suspicious number of imports (%d)" % len(self.imports) + constants.RESET)
 		
+		self.blacklistedImports()
 		if len(self.suspiciousFunctions):
 			print(constants.RED + "The following %d out of %d imports are blacklisted:" % (len(self.suspiciousFunctions), len(self.imports)) + constants.RESET)
 			table = prettytable.PrettyTable()
 			table.field_names = ["Library", "Function", "Group"]
 			
 			for imp in self.suspiciousFunctions:
-				table.add_row([imp['lib'], imp['fct'], imp['group']])
+				table.add_row([imp.lib, imp.fct, imp.group])
 			
 			resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
 			print(resultString)
