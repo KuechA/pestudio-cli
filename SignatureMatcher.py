@@ -1,4 +1,4 @@
-import pepy
+import lief
 import binascii
 import argparse
 import xml.etree.ElementTree as ET
@@ -15,7 +15,7 @@ class Signature:
 
 class SignatureMatcher:
 	def __init__(self, file):
-		self.peFile = pepy.parse(file)
+		self.peFile = lief.parse(file)
 
 	def getSignatures(self):
 		'''
@@ -42,9 +42,9 @@ class SignatureMatcher:
 		self.getSignatures()
 		
 		self.matches = []
-		for sect in self.peFile.get_sections():
-			if sect.length:
-				sectStart = str(binascii.hexlify(sect.data[:self.maxSize]))[2:-1]
+		for sect in self.peFile.sections:
+			if sect.size:
+				sectStart = "".join(["{0:02x}".format(x) for x in sect.content[:self.maxSize]])
 				for signature in self.signatures:
 					if re.match(signature.sig, sectStart):
 						self.matches.append(signature.name)
