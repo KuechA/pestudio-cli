@@ -99,7 +99,7 @@ class PeAnalyzer:
 		
 		reasonableNumber = self.checkImportNumber()
 		if reasonableNumber:
-			print("Number of imports is in a reasonable range (%d)" % len(self.imports))
+			print(constants.GREEN + "Number of imports is in a reasonable range (%d)" % len(self.imports), constants.RESET)
 		else:
 			print(constants.RED + "Suspicious number of imports (%d)" % len(self.imports) + constants.RESET)
 		
@@ -115,7 +115,7 @@ class PeAnalyzer:
 			resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
 			print(resultString)
 		else:
-			print("None of the imports is blacklisted.")
+			print(constants.GREEN + "None of the imports is blacklisted.", constants.RESET)
 
 	def getImportXml(self, root):
 		self.blacklistedImports()
@@ -137,11 +137,12 @@ class PeAnalyzer:
 
 	def __getResources(self):
 		self.resources = []
-		for resourceType in self.peFile.resources.childs:
-			for resource in resourceType.childs:
-				for lang in resource.childs:
-					name = resource.name if resource.has_name else hex(resource.id)
-					self.resources.append(Resource(resourceType.id, name, lang.id, hashlib.md5(bytes(lang.content))))
+		if self.peFile.has_resources:
+			for resourceType in self.peFile.resources.childs:
+				for resource in resourceType.childs:
+					for lang in resource.childs:
+						name = resource.name if resource.has_name else hex(resource.id)
+						self.resources.append(Resource(resourceType.id, name, lang.id, hashlib.md5(bytes(lang.content))))
 		
 		return self.resources
 
@@ -210,6 +211,7 @@ class PeAnalyzer:
 		# and in translations.xml we have a "severity" value
 		table = prettytable.PrettyTable()
 		table.field_names = ["Type", "Name", "MD5", "Language"]
+		print("List of all resources: ")
 		for resource in self.resources:
 			res_type = resource.type
 			name = resource.name
@@ -278,6 +280,21 @@ class PeAnalyzer:
 		resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
 		print(resultString)
 
+	def printTLS(self):
+		if not self.peFile.has_tls:
+			print(constants.GREEN + "No TLS callbacks found." + constants.RESET)
+			return
+		print(constants.RED + "List of TLS callbacks found: " + constants.RESET)
+		table_entry_address = self.peFile.tls.addressof_callbacks
+		callback = self.peFile.get_content_from_virtual_address(table_entry_address, 4)
+		callback = '0x' + "".join(["{0:02x}".format(x) for x in callback[::-1]])
+		while int(callback, 16) !=0:
+			print('\t' + callback)
+			table_entry_address +=4
+			callback = self.peFile.get_content_from_virtual_address(table_entry_address, 4)
+			callback = '0x' + "".join(["{0:02x}".format(x) for x in callback])
+			
+			
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='PE file analyzer')
 	parser.add_argument("-f", "--file", help="The file to analyze", required=True, dest="file")
@@ -286,8 +303,10 @@ if __name__ == "__main__":
 	peAnalyzer = PeAnalyzer(args.file)	
 	peAnalyzer.printImportInformation()
 	blacklistedResources = peAnalyzer.blacklistedResources()
-	print("Blacklisted resources found: " + str(blacklistedResources) if len(blacklistedResources) > 0 else "No blacklisted resources found")
+	print(constants.RED + "Blacklisted resources found: " + str(blacklistedResources) if len(blacklistedResources) > 0 else constants.GREEN + "No blacklisted resources found", constants.RESET)
 	# TODO: Check resource types and corresponding thresholds in thresholds.xml
+	
 	peAnalyzer.showAllResources()
 	
 	peAnalyzer.printHeaderInformation()
+	peAnalyzer.printTLS()
