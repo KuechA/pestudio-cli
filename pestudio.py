@@ -19,6 +19,7 @@ def parseCommandLineArguments():
 	parser.add_argument("-i", "--imports", help="Check the imports against known malicious functions.", action="store_true", dest="imports")
 	parser.add_argument("-r", "--resources", help="Check the resources for blacklisted values.", action="store_true", dest="resources")
 	parser.add_argument("-s", "--signatures", help="Check for known signatures (e.g. packers).", action="store_true", dest="signatures")
+	parser.add_argument("--strings", help="Check the strings in the PE file.", action="store_true", dest="strings")
 	parser.add_argument("-x", "--xml", help="Format output as xml.", action="store_true", dest="xml")
 	return parser.parse_args()
 
@@ -67,6 +68,13 @@ def checkFile(args):
 			# TODO: Check resource types and corresponding thresholds in thresholds.xml
 			
 			peAnalyzer.showAllResources()
+	
+	if args.strings:		
+		if args.xml:
+			root = peAnalyzer.addAllStringsXml(root)
+		else:
+			print("Strings in the PE file:")
+			peAnalyzer.printAllStrings()
 	
 	if args.signatures:
 		matcher = SignatureMatcher(args.file)
