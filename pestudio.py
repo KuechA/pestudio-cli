@@ -17,7 +17,9 @@ def parseCommandLineArguments():
 	parser.add_argument("--header", help="Show information from header.", action="store_true", dest="header")
 	parser.add_argument("-t", "--tlsCallbacks", help="Show addresses of TLS callbacks.", action="store_true", dest="tls")
 	parser.add_argument("-i", "--imports", help="Check the imports against known malicious functions.", action="store_true", dest="imports")
+	parser.add_argument("-e", "--exports", help="Show the exports of the binary", action="store_true", dest="exports")
 	parser.add_argument("-r", "--resources", help="Check the resources for blacklisted values.", action="store_true", dest="resources")
+	parser.add_argument("--relocations", help="Show the relocations.", action="store_true", dest="relocations")
 	parser.add_argument("-s", "--signatures", help="Check for known signatures (e.g. packers).", action="store_true", dest="signatures")
 	parser.add_argument("--strings", help="Check the strings in the PE file.", action="store_true", dest="strings")
 	parser.add_argument("-x", "--xml", help="Format output as xml.", action="store_true", dest="xml")
@@ -57,6 +59,18 @@ def checkFile(args):
 			root = peAnalyzer.getImportXml(root)
 		else:
 			peAnalyzer.printImportInformation()
+	
+	if args.exports:
+		if args.xml:
+			root = peAnalyzer.addExportsXml(root)
+		else:
+			peAnalyzer.printExports()
+	
+	if args.relocations:
+		if args.xml:
+			root = peAnalyzer.addRelocationsXml(root)
+		else:
+			peAnalyzer.printRelocations()
 	
 	if args.resources:
 		blacklistedResources = peAnalyzer.blacklistedResources()

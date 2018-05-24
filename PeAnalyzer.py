@@ -490,12 +490,42 @@ class PeAnalyzer:
 	def addExportsXml(self, root):
 		exports = ET.SubElement(root, "Exports")
 		if not self.peFile.has_exports:
-			return
+			return root
 		
-		exp = ET.SubElement(exports, "export")
 		for entry in self.peFile.get_export().entries:
+			exp = ET.SubElement(exports, "export")
 			exp.text = entry.name
 			exp.attrib['address'] = hex(entry.address)
+		
+		return root
+	
+	def printRelocations(self):
+		if not self.peFile.has_relocations:
+			print(constants.GREEN + "The binary uses no relocations" + constants.RESET)
+			return
+		
+		table = prettytable.PrettyTable()
+		table.field_names = ["Virtual address", "Position", "Type", "Size"]
+		for reloc in self.peFile.relocations:
+			for entry in reloc.entries:
+				table.add_row([hex(reloc.virtual_address), hex(entry.position), hex(entry.type), str(entry.size)])
+		
+		print("Relocations of the binary:")
+		resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
+		print(resultString)
+	
+	def addRelocationsXml(self, root):
+		relocations = ET.SubElement(root, "Relocations")
+		if not self.peFile.has_relocations:
+			return root
+		
+		for reloc in self.peFile.relocations:
+			for entry in reloc.entries:
+				relocation = ET.SubElement(exports, "relocation")
+				relocation.text = hex(entry.position)
+				relocation.attrib['va'] = hex(reloc.virtual_address)
+				relocation.attrib['type'] = hex(entry.type)
+				relocation.attrib['size'] = str(entry.siue)
 		
 		return root
 
@@ -516,5 +546,6 @@ if __name__ == "__main__":
 	#peAnalyzer.printAllStrings()
 	peAnalyzer.getBlacklistedStrings()
 	peAnalyzer.printExports()
+	peAnalyzer.printRelocations()
 	
 	
