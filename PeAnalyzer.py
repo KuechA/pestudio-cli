@@ -472,6 +472,32 @@ class PeAnalyzer:
 			ET.SubElement(strings, "str").text = s
 			
 		return root
+	
+	def printExports(self):
+		if not self.peFile.has_exports: # Max threshold 3000?
+			print(constants.GREEN + "The binary has no exports" + constants.RESET)
+			return
+		
+		table = prettytable.PrettyTable()
+		table.field_names = ["Name", "Address"]
+		for entry in self.peFile.get_export().entries:
+			table.add_row([entry.name, hex(entry.address)])
+		
+		print("Exports of the binary:")
+		resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
+		print(resultString)
+	
+	def addExportsXml(self, root):
+		exports = ET.SubElement(root, "Exports")
+		if not self.peFile.has_exports:
+			return
+		
+		exp = ET.SubElement(exports, "export")
+		for entry in self.peFile.get_export().entries:
+			exp.text = entry.name
+			exp.attrib['address'] = hex(entry.address)
+		
+		return root
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='PE file analyzer')
@@ -487,7 +513,8 @@ if __name__ == "__main__":
 	peAnalyzer.showAllResources()
 	peAnalyzer.printHeaderInformation()
 	peAnalyzer.printTLS()
-	peAnalyzer.printAllStrings()
+	#peAnalyzer.printAllStrings()
 	peAnalyzer.getBlacklistedStrings()
+	peAnalyzer.printExports()
 	
 	
