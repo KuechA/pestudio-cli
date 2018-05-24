@@ -334,6 +334,129 @@ class PeAnalyzer:
 						self.strings.append(s)
 					s = ""
 	
+	def getBlacklistedStrings(self):
+		if self.strings is None:
+			self.searchAllStrings()
+		table = prettytable.PrettyTable()
+		table.field_names = ["String", "Group"]
+		stringsXml = ET.parse("xml/strings.xml").getroot()
+		blacklisted = 0
+		# TODO: Maybe use regex instead of checking if the string is in the list of strings?
+		for r in stringsXml.find('psw').findall('item'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Passwords"])
+				blacklisted += 1
+		for r in stringsXml.find('avs').findall('av'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Anti-Virus detection"])
+				blacklisted += 1
+		for r in stringsXml.find('regexs').findall('regex'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Regular expressions"])
+				blacklisted += 1
+		for r in stringsXml.find('privs').findall('priv'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Privileges"])
+				blacklisted += 1
+		for r in stringsXml.find('oids').findall('oid'):
+			if r.text in self.strings:
+				table.add_row([r.text, "oids"])
+				blacklisted += 1
+		for r in stringsXml.find('agents').findall('agent'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Agents"])
+				blacklisted += 1
+		for r in stringsXml.find('exts').findall('ext'):
+			if r.text in self.strings:
+				table.add_row([r.text, "File extensions"])
+				blacklisted += 1
+		for r in stringsXml.find('sddls').findall('sddl'):
+			if r.text in self.strings:
+				table.add_row([r.text, "SDDLs"])
+				blacklisted += 1
+		allFolders = [f for fs in stringsXml.findall('folders') for f in fs.findall('folder')]
+		for r in allFolders:
+			if r.text in self.strings:
+				if r.attrib['name'] is not None:
+					table.add_row([r.text, "Folders (%s)" % r.attrib['name']])
+				else:
+					table.add_row([r.text, "Folders"])
+				blacklisted += 1
+		for r in stringsXml.find('guids').findall('guid'):
+			if r.text in self.strings:
+				table.add_row([r.text, "GUIDs"])
+				blacklisted += 1
+		for r in stringsXml.find('regs').findall('reg'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Registry"])
+				blacklisted += 1
+		for r in stringsXml.find('oss').findall('os'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Operating Systems"])
+				blacklisted += 1
+		for r in stringsXml.find('products').findall('product'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Sandbox products"])
+				blacklisted += 1
+		for r in stringsXml.find('sids').findall('sid'):
+			if r.text in self.strings:
+				table.add_row([r.text, "SIDs"])
+				blacklisted += 1
+		for r in stringsXml.find('protocols').findall('protocol'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Protocols"])
+				blacklisted += 1
+		for r in stringsXml.find('utilities').findall('item'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Utilities"])
+				blacklisted += 1
+		keys = 0
+		for r in stringsXml.find('keys').findall('key'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Keyboard keys"])
+				blacklisted += 1
+				keys += 1
+		for r in stringsXml.find('oss').findall('os'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Operating Systems"])
+				blacklisted += 1
+		for r in stringsXml.find('events').findall('event'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Events"])
+				blacklisted += 1
+		insults = 0
+		for r in stringsXml.find('insults').findall('insult'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Insult"])
+				blacklisted += 1
+				insults += 1
+		for r in stringsXml.find('dos_stub').findall('item'):
+			if r.text in self.strings:
+				table.add_row([r.text, "DOS stubs"])
+				blacklisted += 1
+		# TODO: To me, these don't seem to be bad. Maybe we should remove them??
+		for r in stringsXml.find('strings').findall('item'):
+			if r.text in self.strings:
+				table.add_row([r.text, "Further strings"])
+				blacklisted += 1
+		
+		if insults > 0:
+			print(constants.RED + "%d insults found in the file" % (insults) + constants.RESET)
+		else:
+			print(constants.GREEN + "No insults found in the file" + constants.RESET)
+		
+		if keys > 0:
+			print(constants.RED + "%d keyboard keys are used by the file" % (keys) + constants.RESET)
+		else:
+			print(constants.GREEN + "No keyboard keys are used in the file" + constants.RESET)
+		
+		if blacklisted > 0:
+			print(constants.RED + "The following %d out of %d strings are blacklisted:" % (blacklisted, len(self.strings)) + constants.RESET)
+			resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
+			print(resultString)
+		else:
+			print(constants.GREEN + "No blacklisted strings found" + constants.RESET)
+	
 	def printAllStrings(self):
 		if self.strings is None:
 			self.searchAllStrings()
@@ -365,5 +488,6 @@ if __name__ == "__main__":
 	peAnalyzer.printHeaderInformation()
 	peAnalyzer.printTLS()
 	peAnalyzer.printAllStrings()
+	peAnalyzer.getBlacklistedStrings()
 	
 	

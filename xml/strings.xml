@@ -1499,7 +1499,7 @@ It contains the strings that will be detected by pestudio.
     <product>00426-293-8170032-85146</product>
   </products>
 
-  <!-- SID (Security Identifiers -->
+  <!-- SID (Security Identifiers) -->
   <sids>
     <sid name="">S-1-0</sid>
     <sid name="">S-1-0-0</sid>
