@@ -457,8 +457,10 @@ class PeAnalyzer:
 	def printAllStrings(self):
 		if self.strings is None:
 			self.searchAllStrings()
+		res = ""
 		for s in self.strings:
-			print(s)
+			res += s + "\n"
+		return res
 	
 	def addAllStringsXml(self, root):
 		if self.strings is None:
@@ -540,7 +542,7 @@ if __name__ == "__main__":
 	peAnalyzer.showAllResources()
 	peAnalyzer.printHeaderInformation()
 	peAnalyzer.printTLS()
-	#peAnalyzer.printAllStrings()
+	#print(peAnalyzer.printAllStrings())
 	peAnalyzer.getBlacklistedStrings()
 	peAnalyzer.printExports()
 	peAnalyzer.printRelocations()

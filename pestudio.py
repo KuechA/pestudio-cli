@@ -9,6 +9,7 @@ import re
 import constants
 import xml.etree.ElementTree as ET
 import sys
+import pydoc
 
 def parseCommandLineArguments():
 	parser = argparse.ArgumentParser(description='PE file analyzer. The default output is human-readable and structured in tables. If no file is specifies, the interactive mode is entered.')
@@ -64,8 +65,7 @@ def interactiveMode(file = None):
 		elif user_in == "relocations":
 			peAnalyzer.printRelocations()
 		elif user_in == "strings -a":
-			print("Strings in the PE file:")
-			peAnalyzer.printAllStrings()
+			pydoc.pager(peAnalyzer.printAllStrings())
 		elif user_in == "strings -b":
 			peAnalyzer.getBlacklistedStrings()
 		elif user_in == "signatures" or user_in == "s":
@@ -150,7 +150,7 @@ def checkFile(args):
 			root = peAnalyzer.addAllStringsXml(root)
 		else:
 			print("Strings in the PE file:")
-			peAnalyzer.printAllStrings()
+			print(peAnalyzer.printAllStrings())
 			peAnalyzer.getBlacklistedStrings()
 	
 	if args.signatures:
