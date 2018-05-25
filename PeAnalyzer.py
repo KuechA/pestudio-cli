@@ -331,9 +331,10 @@ class PeAnalyzer:
 						self.strings.append(s)
 					s = ""
 	
-	def getBlacklistedStrings(self):
+	def getBlacklistedStrings(self, printToConsole = True):
 		if self.strings is None:
 			self.searchAllStrings()
+		
 		table = prettytable.PrettyTable()
 		table.field_names = ["String", "Group"]
 		stringsXml = ET.parse("xml/strings.xml").getroot()
@@ -437,22 +438,25 @@ class PeAnalyzer:
 				table.add_row([r.text, "Further strings"])
 				blacklisted += 1
 		
-		if insults > 0:
-			print(constants.RED + "%d insults found in the file" % (insults) + constants.RESET)
-		else:
-			print(constants.GREEN + "No insults found in the file" + constants.RESET)
+		if printToConsole:
+			if insults > 0:
+				print(constants.RED + "%d insults found in the file" % (insults) + constants.RESET)
+			else:
+				print(constants.GREEN + "No insults found in the file" + constants.RESET)
+			
+			if keys > 0:
+				print(constants.RED + "%d keyboard keys are used by the file" % (keys) + constants.RESET)
+			else:
+				print(constants.GREEN + "No keyboard keys are used in the file" + constants.RESET)
+			
+			if blacklisted > 0:
+				print(constants.RED + "The following %d out of %d strings are blacklisted:" % (blacklisted, len(self.strings)) + constants.RESET)
+				resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
+				print(resultString)
+			else:
+				print(constants.GREEN + "No blacklisted strings found" + constants.RESET)
 		
-		if keys > 0:
-			print(constants.RED + "%d keyboard keys are used by the file" % (keys) + constants.RESET)
-		else:
-			print(constants.GREEN + "No keyboard keys are used in the file" + constants.RESET)
-		
-		if blacklisted > 0:
-			print(constants.RED + "The following %d out of %d strings are blacklisted:" % (blacklisted, len(self.strings)) + constants.RESET)
-			resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
-			print(resultString)
-		else:
-			print(constants.GREEN + "No blacklisted strings found" + constants.RESET)
+		return blacklisted, insults, keys
 	
 	def printAllStrings(self):
 		if self.strings is None:
