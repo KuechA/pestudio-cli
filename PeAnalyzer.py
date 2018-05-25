@@ -320,10 +320,7 @@ class PeAnalyzer:
 			callback = '0x' + "".join(["{0:02x}".format(x) for x in callback])
 	
 	def searchAllStrings(self):
-		pattern = re.compile(r"[A-Za-z0-9]{4,}")
-		ranges = ((ord('A'), ord('Z')), (ord('a'), ord('z')), (ord('0'), ord('9')))
 		self.strings = []
-		print(string.printable)
 		for sect in self.peFile.sections:
 			s = ""
 			for byte in sect.content:

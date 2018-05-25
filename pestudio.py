@@ -23,11 +23,73 @@ def parseCommandLineArguments():
 	parser.add_argument("-s", "--signatures", help="Check for known signatures (e.g. packers).", action="store_true", dest="signatures")
 	parser.add_argument("--strings", help="Check the strings in the PE file.", action="store_true", dest="strings")
 	parser.add_argument("-x", "--xml", help="Format output as xml.", action="store_true", dest="xml")
+	parser.add_argument("--interactive", help="Use the tool in interactive mode.", action="store_true", dest="interactive")
 	return parser.parse_args()
 
-def interactiveMode():
-	print("No file has been specified. Entering interactive mode...")
-	print("Not supported yet :(")
+def interactiveMode(file = None):
+	peAnalyzer = None
+	matcher = None
+	vt = None
+	print("Entering interactive mode...")
+	if file is None:
+		print("Please specify file to analyze")
+	user_in = input(">> ")
+	while user_in != "q" and user_in != "quit":
+		if user_in.startswith("file ") or user_in.startswith("f "):
+			# File is specified
+			args = user_in.split(" ")
+			if len(args) > 2:
+				print("Please use the command only with one argument: file|f <filename>")
+			else:
+				# TODO: Check if file exists.
+				file = args[1]
+				peAnalyzer = PeAnalyzer(file)
+				matcher = SignatureMatcher(file)
+				vt = VirusTotalClient(file)
+		elif user_in == "header" or user_in == "h":
+			print("Printing header")
+			peAnalyzer.printHeaderInformation()
+		elif user_in == "imports" or user_in == "i":
+			peAnalyzer.printImportInformation()
+		elif user_in == "exports" or user_in == "e":
+			peAnalyzer.printExports()
+		elif user_in == "resources" or user_in == "r":
+			blacklistedResources = peAnalyzer.blacklistedResources()
+			print("Blacklisted resources found: " + str(blacklistedResources) if len(blacklistedResources) > 0 else "No blacklisted resources found")
+			peAnalyzer.showAllResources()
+		elif user_in == "virusTotal" or user_in == "v":
+			print(vt.printReport())
+		elif user_in == "tlsCallbacks" or user_in == "t":
+			peAnalyzer.printTLS()
+		elif user_in == "relocations":
+			peAnalyzer.printRelocations()
+		elif user_in == "strings -a":
+			print("Strings in the PE file:")
+			peAnalyzer.printAllStrings()
+		elif user_in == "strings -b":
+			peAnalyzer.getBlacklistedStrings()
+		elif user_in == "signatures" or user_in == "s":
+			packers = matcher.findPackers()
+			if len(packers):
+				print(constants.RED + "The signature of the following packer was found: " + str(packers) + constants.RESET)
+			else:
+				print(constants.GREEN + "No packer signature was found in the PE file" + constants.RESET)
+		else:
+			if user_in != "help":
+				print("Command '" + user_in + "' is unknown.")
+			print("Known commands:")
+			print("\tq/quit - quit the program")
+			print("\th/header - show information extracted from the header")
+			print("\ti/imports - show imports of the PE file")
+			print("\te/exports - show exports of the PE file")
+			print("\tr/resources - show resources of the PE file")
+			print("\tt/tlsCallbacks - show TLS callback addresses of the PE file")
+			print("\trelocations - show relocation table of the PE file")
+			print("\tstrings -a - show all strings we can find in the PE file")
+			print("\tstrings -b - show blacklisted strings we can find in the PE file")
+			print("\ts/signatures - find signatures of malicious patterns or packers in the PE file")
+			print("\thelp - print this help text")
+		user_in = input(">> ")
 
 def checkFile(args):
 	if args.xml:
@@ -89,6 +151,7 @@ def checkFile(args):
 		else:
 			print("Strings in the PE file:")
 			peAnalyzer.printAllStrings()
+			peAnalyzer.getBlacklistedStrings()
 	
 	if args.signatures:
 		matcher = SignatureMatcher(args.file)
@@ -100,7 +163,7 @@ def checkFile(args):
 			if len(packers):
 				print(constants.RED + "The signature of the following packer was found: " + str(packers) + constants.RESET)
 			else:
-				print("No packer signature was found in the PE file")
+				print(constants.GREEN + "No packer signature was found in the PE file" + constants.RESET)
 	
 	if args.xml:
 		print(ET.tostring(root).decode('utf-8'))
@@ -108,7 +171,7 @@ def checkFile(args):
 
 if __name__ == "__main__":
 	args = parseCommandLineArguments()
-	if args.file is None:
-		interactiveMode()
+	if args.file is None or args.interactive:
+		interactiveMode(args.file)
 	else:
 		checkFile(args)

@@ -60,7 +60,10 @@ class VirusTotalClient:
 			table = prettytable.PrettyTable()
 			table.field_names = ["Engine", "Version", "Result"]
 			for test, result in self.report["scans"].items():
-				if result['detected']:
+				if showPositiveResultsOnly:
+					if result['detected']:
+						table.add_row([test, result['version'], result['result']])
+				else:
 					table.add_row([test, result['version'], result['result']])
 		
 			resultString += str(re.sub(r'(^|\n)', r'\1\t', str(table)))
