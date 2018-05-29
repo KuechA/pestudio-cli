@@ -34,8 +34,61 @@ class PeAnalyzer:
 	resources = None
 
 	def __init__(self, file):
-		self.peFile = lief.parse(file)
+		self.file = file
+		if lief.is_pe(file):
+			self.peFile = lief.parse(file)
+		else:
+			self.peFile = None
 		self.strings = None
+	
+	def printIndicators(self):
+		if self.peFile.name != self.file.split("/")[-1]: # TODO: Check if that's correct
+			print("\tName: " + self.peFile.name + " differs from file name " + self.file.split("/")[-1])
+		
+		# Suspicious sizes: File, Optional header, file header, certificate
+		# TODO: Read severity from indicators.xml?
+		root = ET.parse("xml/thresholds.xml").getroot()
+		mins = root.find('thresholds').find('minimums')
+		maxs = root.find('thresholds').find('maximums')
+		min = int(mins.find('Image').text)
+		max = int(maxs.find('Image').text)
+		if min <= self.peFile.optional_header.sizeof_image <= max:
+			print(constants.GREEN + "\tSize of image is reasonable (%d bytes)" % self.peFile.optional_header.sizeof_image + constants.RESET)	
+		else:
+			print(constants.RED + "\tSize %d bytes of image is outside reasonable range (%d - %d bytes)" % (self.peFile.optional_header.sizeof_image, min, max) + constants.RESET)
+		
+		min = int(mins.find('file-header').text)
+		max = int(maxs.find('file-header').text)
+		#if min <= self.peFile.dos_header.header_size_in_paragraphs <= max: # TODO: This seems to be incorrect
+		#	print(constants.GREEN + "\tSize of File Header is reasonable (%d bytes)" % self.peFile.sizeof_headers + constants.RESET)	
+		#else:
+		#	print(constants.RED + "\tSize %d bytes of File Header is outide reasonable range (%d - %d bytes)" % (self.peFile.sizeof_headers, min, max) + constants.RESET)
+		
+		min = int(mins.find('optional-header').text)
+		max = int(maxs.find('optional-header').text)
+		if min <= self.peFile.header.sizeof_optional_header <= max: # Not sure if that's correct
+			print(constants.GREEN + "\tSize of Optional Header is reasonable (%d bytes)" % self.peFile.header.sizeof_optional_header + constants.RESET)	
+		else:
+			print(constants.RED + "\tSize %d bytes of Optional Header is outide reasonable range (%d - %d bytes)" % (self.peFile.header.sizeof_optional_header, min, max) + constants.RESET)
+		
+		# Content of certificate??, expired issuer, expired subject, no digital certificate
+		# Self-extractable file??
+		# Managed by .NET??
+		# References debug symbols
+		
+		# Code-less file
+		min = int(mins.find('Code').text)
+		if min > self.peFile.optional_header.sizeof_code:
+			print(constants.RED + "\tThe file is code-less" + constants.RESET)
+		
+		# No manifest
+		if not self.peFile.resources_manager.has_manifest:
+			print(constants.RED + "\tThe file has no Manifest" + constants.RESET)
+		
+		# Entry point in last section, entry point in section which is not executable, entry point outside file
+		# Invalid file checksum, checksum computed different to checksum
+		# No manifest
+		# File ratio of resources
 
 	def __getImports(self):
 		self.imports = []
@@ -278,6 +331,7 @@ class PeAnalyzer:
 		table.add_row(["pointerToSymbolTable", hex(pointerToSymbolTable)])
 		numberOfSymbols = self.peFile.header.numberof_symbols
 		table.add_row(["numberOfSymbols", numberOfSymbols])
+		# TODO Check that optional header size is within thresholds
 		sizeOfOptionalHeader = self.peFile.header.sizeof_optional_header
 		table.add_row(["sizeOfOptionalHeader", sizeOfOptionalHeader])
 		characteristics = self.peFile.header.characteristics

@@ -31,8 +31,23 @@ def parseCommandLineArguments():
 def collectIndicators(vt, peAnalyzer, matcher):
 	print("Indicators:")
 	
+	if peAnalyzer.peFile is None:
+		print(constants.RED + "The file is not a PE file" + constants.RESET)
+		return
+	
 	# VirusTotal result
-	#print(vt.printReport())
+	try:
+		vt.getReport()
+		if vt.report['positives']:
+			vtRes = constants.RED
+		else:
+			vtRes = constants.GREEN
+		vtRes += "VirusTotal result: " + str(vt.report['positives']) + " of " + str(vt.report['total']) + " tests are positive" + constants.RESET
+		print(vtRes)
+	except:
+		print(constants.BLUE + "\tNo connection to VirusTotal possible" + constants.RESET)
+	
+	peAnalyzer.printIndicators()
 	
 	# Suspicious header information
 	timeDateStamp = datetime.datetime.fromtimestamp(peAnalyzer.peFile.header.time_date_stamps)
