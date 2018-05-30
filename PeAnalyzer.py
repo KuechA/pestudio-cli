@@ -72,6 +72,16 @@ class PeAnalyzer:
 			print(constants.RED + "\tSize %d bytes of Optional Header is outide reasonable range (%d - %d bytes)" % (self.peFile.header.sizeof_optional_header, min, max) + constants.RESET)
 		
 		# Content of certificate??, expired issuer, expired subject, no digital certificate
+		if not self.peFile.has_signature:
+			print(constants.RED + "\tThe PE file has no digital signature" + constants.RESET)
+		else:
+			for cert in self.peFile.signature.certificates:
+				cert_from = datetime.datetime.fromtimestamp(cert.valid_from)
+				cert_to = datetime.datetime.fromtimestamp(cert.valid_to)
+				if cert_from > datetime.datetime.now() or cert_to < datetime.datetime.now():
+					print(constants.RED + "\tDigital certificate is used which is not valid (from: %s to: %s)" + (str(cert_from), str(cert_to)) + constants.RESET)
+			# TODO: We should check if the signature is valid but this seems to be ugly
+		
 		# Self-extractable file??
 		# Managed by .NET??
 		# References debug symbols

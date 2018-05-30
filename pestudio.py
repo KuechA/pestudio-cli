@@ -37,13 +37,14 @@ def collectIndicators(vt, peAnalyzer, matcher):
 	
 	# VirusTotal result
 	try:
-		vt.getReport()
-		if vt.report['positives']:
-			vtRes = constants.RED
-		else:
-			vtRes = constants.GREEN
-		vtRes += "VirusTotal result: " + str(vt.report['positives']) + " of " + str(vt.report['total']) + " tests are positive" + constants.RESET
-		print(vtRes)
+		#vt.getReport()
+		#if vt.report['positives']:
+		#	vtRes = constants.RED
+		#else:
+		#	vtRes = constants.GREEN
+		#vtRes += "\tVirusTotal result: " + str(vt.report['positives']) + " of " + str(vt.report['total']) + " tests are positive" + constants.RESET
+		#print(vtRes)
+		pass
 	except:
 		print(constants.BLUE + "\tNo connection to VirusTotal possible" + constants.RESET)
 	
