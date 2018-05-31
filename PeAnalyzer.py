@@ -95,11 +95,37 @@ class PeAnalyzer:
 		if not self.peFile.resources_manager.has_manifest:
 			print(constants.RED + "\tThe file has no Manifest" + constants.RESET)
 		
-		# Entry point in last section, entry point in section which is not executable, entry point outside file
+		# Entrypoint things
+		lastSection = False
+		for section in self.peFile.sections:
+			lastSection = False
+			start = self.peFile.optional_header.imagebase + section.virtual_address
+			if start < self.peFile.entrypoint < start + section.size:
+				# Entrypoint is in this section
+				lastSection = True
+				if not section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE):
+					# Section is not marked as executable
+					print(constants.RED + "\tEntrypoint (%s) in section %s which is not executable" % (hex(self.peFile.entrypoint), section.name) + constants.RESET)
+		
+		if lastSection:
+			# The section of the entry point was the last section in the PE file
+			print(constants.RED + "\tEntrypoint is in last section" + constants.RESET)
+		
+		if self.peFile.entrypoint > self.peFile.optional_header.imagebase + self.peFile.optional_header.sizeof_image:
+			# Entry point outside file
+			print(constants.RED + "\tEntrypoint (%s) is outside the file." % (hex(self.peFile.entrypoint)) + constants.RESET)
+		
 		# Invalid file checksum, checksum computed different to checksum
-		# No manifest
 		# File ratio of resources
-
+		if self.peFile.has_resources:
+			rsrc_directory = self.peFile.data_directory(lief.PE.DATA_DIRECTORY.RESOURCE_TABLE)
+			if rsrc_directory.has_section:
+				min = int(mins.find('ProcentResource').text)
+				max = int(maxs.find('ProcentResource').text)
+				percentage = (rsrc_directory.section.size / self.peFile.optional_header.sizeof_image ) * 100
+				if not (min <= percentage <= max):
+					print(constants.RED + "\tThe file-ratio (%d) of the resources is suspicious" % (percentage) + constants.RESET)
+	
 	def __getImports(self):
 		self.imports = []
 		for i in self.peFile.imports:
