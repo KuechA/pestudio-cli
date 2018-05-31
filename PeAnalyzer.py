@@ -125,7 +125,43 @@ class PeAnalyzer:
 				percentage = (rsrc_directory.section.size / self.peFile.optional_header.sizeof_image ) * 100
 				if not (min <= percentage <= max):
 					print(constants.RED + "\tThe file-ratio (%d) of the resources is suspicious" % (percentage) + constants.RESET)
-	
+		
+		# PE file uses control flow guard
+		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.GUARD_CF):
+			print(constants.RED + "\tThe file implements Control Flow Guard (CFG)" + constants.RESET)
+		
+		# PE file is a WDM device driver
+		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.WDM_DRIVER):
+			print(constants.RED + "\tThe file is a Device Driver" + constants.RESET)
+		
+		# PE file makes use of DEP protection
+		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.NX_COMPAT):
+			print(constants.RED + "\tThe file opts for Data Execution Prevention (DEP)" + constants.RESET)
+		else:
+			print(constants.RED + "\tThe file ignores Data Execution Prevention (DEP)" + constants.RESET)
+		
+		# PE file makes use of ASLR
+		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.DYNAMIC_BASE):
+			print(constants.RED + "\tThe file opts for Address Space Layout Randomization (ASLR)" + constants.RESET)
+		else:
+			print(constants.RED + "\tThe file ignores Address Space Layout Randomization (ASLR)" + constants.RESET)
+		
+		# PE file does not use of structured error handling (SEH)
+		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.NO_SEH):
+			print(constants.RED + "\tThe file ignores Structured Exception Handling (SEH)" + constants.RESET)
+		
+		# PE file does not use GS
+		if self.peFile.has_configuration:
+			if self.peFile.load_configuration.security_cookie == 0:
+				print(constants.RED + "\tThe file ignores cookies on the stack (GS)" + constants.RESET)
+			else:
+				print(constants.RED + "\tThe file opts for cookies on the stack (GS)" + constants.RESET)
+		
+		# PE file does not use code integrity
+		if self.peFile.has_configuration:
+			if isinstance(self.peFile.load_configuration, lief.PE.LoadConfigurationV2) and self.peFile.load_configuration.code_integrity.catalog == 0xFFFF:
+				print(constants.RED + "\tThe file ignores Code Integrity" + constants.RESET)
+		
 	def __getImports(self):
 		self.imports = []
 		for i in self.peFile.imports:
