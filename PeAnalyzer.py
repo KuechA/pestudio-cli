@@ -162,6 +162,21 @@ class PeAnalyzer:
 			if isinstance(self.peFile.load_configuration, lief.PE.LoadConfigurationV2) and self.peFile.load_configuration.code_integrity.catalog == 0xFFFF:
 				print(constants.RED + "\tThe file ignores Code Integrity" + constants.RESET)
 		
+		# Get the pdb debug file name
+		data_dir = self.peFile.data_directory(lief.PE.DATA_DIRECTORY.DEBUG)
+		if data_dir.size != 0:
+			dbg_file_name_lst = self.peFile.get_content_from_virtual_address(data_dir.rva, self.peFile.optional_header.imagebase + self.peFile.data_dir.size - 24)
+			dbg_file_name = "".join(chr(c) for c in dbg_file_name_lst)
+			print(constants.RED + "\tThe file references a debug symbols file (path: %s)" % (dbg_file_name) + constants.RESET)
+			if dbg_file_name.split(".")[-1] != ".pdb":
+				print(constants.RED + "\tThe debug file name extension %s is suspicous" % (dbg_file_name.split(".")[-1]) + constants.RESET)
+		
+		# Suspicious debug timestamp
+		if self.peFile.has_debug:
+			dbg_time = datetime.datetime.fromtimestamp(self.peFile.debug.timestamp)
+			if dbg_time > time.now(): # TODO: There are more criteria for sure.
+				print(constants.RED + "The age (%s) of the debug file is suspicious" % (str(dbg_time)) + constants.RESET)
+		
 	def __getImports(self):
 		self.imports = []
 		for i in self.peFile.imports:
