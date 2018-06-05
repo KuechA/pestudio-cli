@@ -323,6 +323,17 @@ class PeAnalyzer:
 			fct.text = imp.fct
 		
 		return root
+	
+	def getImportJson(self, jsonDict):
+		self.blacklistedImports()
+		
+		res = {"summary": {"blacklisted": str(len(self.suspiciousFunctions)), "total": str(len(self.imports))}}
+		res["blacklisted"] = []
+		for imp in self.suspiciousFunctions:
+			res["blacklisted"].append({"library": imp.lib, "group": imp.group, "blacklisted": str(imp.blacklisted), "function": imp.fct})
+		
+		jsonDict["Imports"] = res
+		return jsonDict
 
 	def __getResources(self):
 		self.resources = []
@@ -396,6 +407,28 @@ class PeAnalyzer:
 			res.text = resource.md5.hexdigest().upper()
 		
 		return root
+	
+	def addResourcesJson(self, jsonDict):
+		if self.resources is None:
+			self.__getResources()
+		if self.blacklistedRes is None:
+			self.blacklistedResources()
+		
+		res = {"summary": {"blacklisted": str(len(self.blacklistedRes)), "total": str(len(self.resources))}}
+		
+		res["blacklisted"] = self.blacklistedRes
+		blacklisted = ET.SubElement(resources, "blacklisted")
+		
+		languages = self.__get_languages()
+		
+		allResources = ET.SubElement(resources, "resource-list")
+		res["resource-list"] = []
+		for resource in self.resources:
+			res["resource-list"].append({"type": str(resource.type), "name": str(resource.name),
+				"language": languages[resource.language], "md5": resource.md5.hexdigest().upper()})
+		
+		jsonDict["Resources"] = res
+		return jsonDict
 
 	def showAllResources(self):
 		if self.resources is None:
@@ -443,6 +476,20 @@ class PeAnalyzer:
 		PE32.text = str(self.peFile.dos_header.magic == 267)
 
 		return root
+	
+	def addHeaderInformationJson(self, jsonDict):
+		res = {}
+		res["signature"] = "".join(["{0:02x}".format(x) for x in self.peFile.header.signature])
+		res["machine"] = constants.MACHINE_TYPE[self.peFile.header.machine]
+		res["numberOfSections"] = hex(self.peFile.header.numberof_sections)
+		res["numberOfSections"] = str(datetime.datetime.fromtimestamp(self.peFile.header.time_date_stamps))
+		res["pointerToSymbolTable"] = hex(self.peFile.header.pointerto_symbol_table)
+		res["numberOfSymbols"] = str(self.peFile.header.numberof_symbols)
+		res["sizeOfOptionalHeader"] = str(self.peFile.header.sizeof_optional_header)
+		res["characteristics"] = hex(self.peFile.header.characteristics)
+		res["PE32"] = str(self.peFile.dos_header.magic == 267)
+		jsonDict["FileHeader"] = res
+		return jsonDict
 
 	def printHeaderInformation(self):
 		table = prettytable.PrettyTable()
@@ -492,6 +539,23 @@ class PeAnalyzer:
 			table_entry_address +=4
 			callback = self.peFile.get_content_from_virtual_address(table_entry_address, 4)
 			callback = '0x' + "".join(["{0:02x}".format(x) for x in callback])
+		
+		return root
+	
+	def addTLSJson(self, jsonDict):
+		if not self.peFile.has_tls:
+			return
+		jsonDict["TlsCallbacks"] = []
+		table_entry_address = self.peFile.tls.addressof_callbacks
+		callback = self.peFile.get_content_from_virtual_address(table_entry_address, 4)
+		callback = '0x' + "".join(["{0:02x}".format(x) for x in callback[::-1]])
+		while int(callback, 16) !=0:
+			jsonDict["TlsCallbacks"].append(callback)
+			table_entry_address +=4
+			callback = self.peFile.get_content_from_virtual_address(table_entry_address, 4)
+			callback = '0x' + "".join(["{0:02x}".format(x) for x in callback])
+		
+		return jsonDict
 
 	def printTLS(self):
 		if not self.peFile.has_tls:
@@ -664,6 +728,12 @@ class PeAnalyzer:
 			
 		return root
 	
+	def addAllStringsJson(self, jsonDict):
+		if self.strings is None:
+			self.searchAllStrings()
+		jsonDict["Strings"] = self.strings
+		return jsonDict
+	
 	def printExports(self):
 		if not self.peFile.has_exports: # Max threshold 3000?
 			print(constants.GREEN + "The binary has no exports" + constants.RESET)
@@ -689,6 +759,16 @@ class PeAnalyzer:
 			exp.attrib['address'] = hex(entry.address)
 		
 		return root
+	
+	def addExportsJson(self, jsonDict):
+		jsonDict["Exports"] = []
+		if not self.peFile.has_exports:
+			return jsonDict
+		
+		for entry in self.peFile.get_export().entries:
+			jsonDict["Exports"].append({"address": hex(entry.address), "name": entry.name})
+		
+		return jsonDict
 	
 	def printRelocations(self):
 		if not self.peFile.has_relocations:
@@ -716,9 +796,23 @@ class PeAnalyzer:
 				relocation.text = hex(entry.position)
 				relocation.attrib['va'] = hex(reloc.virtual_address)
 				relocation.attrib['type'] = hex(entry.type)
-				relocation.attrib['size'] = str(entry.siue)
+				relocation.attrib['size'] = str(entry.size)
 		
 		return root
+	
+	def addRelocationsJson(self, jsonDict):
+		if not self.peFile.has_relocations:
+			jsonDict["Relocations"] = {}
+			return jsonDict
+		
+		res = []
+		for reloc in self.peFile.relocations:
+			for entry in reloc.entries:
+				res.append({"position": hex(entry.position), "va": hex(reloc.virtual_address),
+					"type": hex(entry.type), "size": str(entry.size)})
+		
+		jsonDict["Relocations"] = res
+		return jsonDict
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='PE file analyzer')

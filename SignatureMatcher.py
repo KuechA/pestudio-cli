@@ -56,8 +56,12 @@ class SignatureMatcher:
 			packer.text = match
 		
 		return root
-
 	
+	def addPackersJson(self, jsonDict):
+		jsonDict["Packers"] = self.matches
+		return jsonDict
+
+
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='PE file analyzer')
 	parser.add_argument("-f", "--file", help="The file to analyze", required=True, dest="file")

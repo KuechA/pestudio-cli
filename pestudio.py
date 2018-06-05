@@ -8,6 +8,7 @@ import prettytable
 import re
 import constants
 import xml.etree.ElementTree as ET
+import json
 import sys
 import pydoc
 import datetime
@@ -25,6 +26,7 @@ def parseCommandLineArguments():
 	parser.add_argument("-s", "--signatures", help="Check for known signatures (e.g. packers).", action="store_true", dest="signatures")
 	parser.add_argument("--strings", help="Check the strings in the PE file.", action="store_true", dest="strings")
 	parser.add_argument("-x", "--xml", help="Format output as xml.", action="store_true", dest="xml")
+	parser.add_argument("-j", "--json", help="Format output as JSON.", action="store_true", dest="json")
 	parser.add_argument("--interactive", help="Use the tool in interactive mode.", action="store_true", dest="interactive")
 	return parser.parse_args()
 
@@ -167,6 +169,7 @@ def interactiveMode(file = None):
 				print("Command '" + user_in + "' is unknown.")
 			print("Known commands:")
 			print("\tq/quit - quit the program")
+			print("\tindicators - show indicators of malware in the PE file")
 			print("\th/header - show information extracted from the header")
 			print("\ti/imports - show imports of the PE file")
 			print("\te/exports - show exports of the PE file")
@@ -182,11 +185,15 @@ def interactiveMode(file = None):
 def checkFile(args):
 	if args.xml:
 		root = ET.Element("Report")
+	elif args.json:
+		jsonDict = {}
 
 	if args.virusTotal:
 		vt = VirusTotalClient(args.file)
 		if args.xml:
 			root = vt.getXmlReport(root)
+		elif args.json:
+			jsonDict = vt.getJsonReport(jsonDict)
 		else:
 			print(vt.printReport())
 	
@@ -195,30 +202,40 @@ def checkFile(args):
 	if args.header:
 		if args.xml:
 			peAnalyzer.addHeaderInformationXml(root)
+		elif args.json:
+			jsonDict = peAnalyzer.addHeaderInformationJson(jsonDict)
 		else:
 			peAnalyzer.printHeaderInformation()
 	
 	if args.tls:
 		if args.xml:
-			peAnalyzer.addTLSXml(root)
+			root = peAnalyzer.addTLSXml(root)
+		elif args.json:
+			jsonDict = peAnalyzer.addTLSJson(jsonDict)
 		else:
 			peAnalyzer.printTLS()
 	
 	if args.imports:
 		if args.xml:
 			root = peAnalyzer.getImportXml(root)
+		elif args.json:
+			jsonDict = peAnalyzer.getImportJson(jsonDict)
 		else:
 			peAnalyzer.printImportInformation()
 	
 	if args.exports:
 		if args.xml:
 			root = peAnalyzer.addExportsXml(root)
+		elif args.json:
+			jsonDict = peAnalyzer.addExportsJson(jsonDict)
 		else:
 			peAnalyzer.printExports()
 	
 	if args.relocations:
 		if args.xml:
 			root = peAnalyzer.addRelocationsXml(root)
+		elif args.json:
+			jsonDict = peAnalyzer.addRelocationsJson(jsonDict)
 		else:
 			peAnalyzer.printRelocations()
 	
@@ -227,15 +244,19 @@ def checkFile(args):
 		
 		if args.xml:
 			root = peAnalyzer.addResourcesXml(root)
+		elif args.json:
+			jsonDict = peAnalyzer.addResourcesJson(jsonDict)
 		else:
 			print("Blacklisted resources found: " + str(blacklistedResources) if len(blacklistedResources) > 0 else "No blacklisted resources found")
 			# TODO: Check resource types and corresponding thresholds in thresholds.xml
 			
 			peAnalyzer.showAllResources()
 	
-	if args.strings:		
+	if args.strings:
 		if args.xml:
 			root = peAnalyzer.addAllStringsXml(root)
+		if args.json:
+			jsonDict = peAnalyzer.addAllStringsJson(jsonDict)
 		else:
 			print("Strings in the PE file:")
 			print(peAnalyzer.printAllStrings())
@@ -247,6 +268,8 @@ def checkFile(args):
 		
 		if args.xml:
 			root = matcher.addPackersXml(root)
+		elif args.json:
+			jsonDict = matcher.addPackersJson(jsonDict)
 		else:
 			if len(packers):
 				print(constants.RED + "The signature of the following packer was found: " + str(packers) + constants.RESET)
@@ -255,7 +278,8 @@ def checkFile(args):
 	
 	if args.xml:
 		print(ET.tostring(root).decode('utf-8'))
-	
+	elif args.json:
+		print(json.dumps(jsonDict))
 
 if __name__ == "__main__":
 	args = parseCommandLineArguments()
