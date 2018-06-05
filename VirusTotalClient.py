@@ -87,8 +87,8 @@ class VirusTotalClient:
 		details = ET.SubElement(vtRes, "details")
 		for test, result in self.report["scans"].items():
 			res = ET.SubElement(details, "test-result")
-			res.set("engine", test)
-			res.set("version", result['version'])
+			res.set("engine", str(test))
+			res.set("version", str(result['version']))
 			res.text = str(result['result'])
 		
 		return root

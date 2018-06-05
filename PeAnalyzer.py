@@ -508,7 +508,7 @@ class PeAnalyzer:
 			callback = '0x' + "".join(["{0:02x}".format(x) for x in callback])
 	
 	def searchAllStrings(self):
-		self.strings = []
+		self.strings = set()
 		for sect in self.peFile.sections:
 			s = ""
 			for byte in sect.content:
@@ -516,7 +516,7 @@ class PeAnalyzer:
 					s += chr(byte)
 				else:
 					if len(s) > 3:
-						self.strings.append(s)
+						self.strings.add(s)
 					s = ""
 	
 	def getBlacklistedStrings(self, printToConsole = True):
