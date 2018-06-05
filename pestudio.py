@@ -168,6 +168,8 @@ def interactiveMode(file = None):
 			if user_in != "help":
 				print("Command '" + user_in + "' is unknown.")
 			print("Known commands:")
+			print("\thelp - print help text")
+			print("\tf/file <filename> - specify which file should be analyzed")
 			print("\tq/quit - quit the program")
 			print("\tindicators - show indicators of malware in the PE file")
 			print("\th/header - show information extracted from the header")
