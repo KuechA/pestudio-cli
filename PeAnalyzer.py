@@ -111,9 +111,12 @@ class PeAnalyzer:
 			# The section of the entry point was the last section in the PE file
 			print(constants.RED + "\tEntrypoint is in last section" + constants.RESET)
 		
-		if self.peFile.entrypoint > self.peFile.optional_header.imagebase + self.peFile.optional_header.sizeof_image:
+		if self.peFile.optional_header.imagebase > self.peFile.entrypoint > self.peFile.optional_header.imagebase + self.peFile.optional_header.sizeof_image:
 			# Entry point outside file
 			print(constants.RED + "\tEntrypoint (%s) is outside the file." % (hex(self.peFile.entrypoint)) + constants.RESET)
+		
+		if self.peFile.entrypoint == 0:
+			print(constants.RED + "\tThe address of the entry-point is zero" + constants.RESET)
 		
 		# Invalid file checksum, checksum computed different to checksum
 		# File ratio of resources
@@ -177,6 +180,40 @@ class PeAnalyzer:
 			if dbg_time > time.now(): # TODO: There are more criteria for sure.
 				print(constants.RED + "The age (%s) of the debug file is suspicious" % (str(dbg_time)) + constants.RESET)
 		
+		# Check entropy of the sections, number of shared sections
+		min = int(mins.find('Entropy').text)
+		max = int(maxs.find('Entropy').text)
+		sharedSect = 0
+		for sect in self.peFile.sections:
+			if not min < sect.entropy < max:
+				print(constants.RED + "\tThe entropy %d of section %s is suspicious" % (sect.entropy, sect.name) + constants.RESET)
+			
+			if sect.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_SHARED):
+				sharedSect += 1
+		
+		min = int(mins.find('SharedSections').text)
+		max = int(maxs.find('SharedSections').text)
+		if not min < sharedSect < max:
+			print(constants.RED + "\tThe shared section(s) (%d) reached the max (%d) threshold" % (sharedSect, max) + constants.RESET)
+		
+		# Check if first section is writable or last section is executable
+		if list(self.peFile.sections)[0].has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_WRITE):
+			print(constants.RED + "\tThe first section (name:%s) is writable" % (self.peFile.sections[0].name) + constants.RESET)
+		
+		if list(self.peFile.sections)[-1].has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE):
+			print(constants.RED + "\tThe last section (name:%s) is executable" % (self.peFile.sections[0].name) + constants.RESET)
+		
+		# Size of initialized data
+		min = int(mins.find('InitializedData').text)
+		max = int(maxs.find('InitializedData').text)
+		if not min < self.peFile.optional_header.sizeof_initialized_data < max:
+			print(constants.RED + "The size of initialized data reached the max (%d bytes) threshold" % self.peFile.optional_header.sizeof_initialized_data + constants.RESET)
+	
+		# File references missing library
+		
+		# Check imphash
+		self.checkImphashes()
+	
 	def __getImports(self):
 		self.imports = []
 		for i in self.peFile.imports:
@@ -202,6 +239,16 @@ class PeAnalyzer:
 		for group in root.find('groups').findall('group'):
 			groups[group.attrib['id']] = group.text
 		return groups
+	
+	def checkImphashes(self):
+		'''
+		Parses the xml/functions.xml file and checks the imphash of the binary
+		'''
+		imphash = lief.PE.get_imphash(self.peFile).lower()
+		root = ET.parse("xml/functions.xml").getroot()
+		for hash in root.find('imphashes').findall('imphash'):
+			if imphash == hash.text.lower():
+				print(constants.RED + "Found matching imphash (%s) for the file" % imphash + constants.RESET)
 
 	def blacklistedImports(self):
 		'''
