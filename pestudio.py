@@ -51,6 +51,7 @@ def collectIndicators(vt, peAnalyzer, matcher):
 		print(constants.BLUE + "\tNo connection to VirusTotal possible" + constants.RESET)
 	
 	peAnalyzer.printIndicators()
+	peAnalyzer.checkFeatures()
 	
 	# Suspicious header information
 	timeDateStamp = datetime.datetime.fromtimestamp(peAnalyzer.peFile.header.time_date_stamps)

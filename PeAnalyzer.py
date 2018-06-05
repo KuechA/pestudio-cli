@@ -214,6 +214,23 @@ class PeAnalyzer:
 		# Check imphash
 		self.checkImphashes()
 	
+	def checkFeatures(self):
+		for imp in self.imports:
+			if imp.lib == "smartcard.dll":
+				print(constants.RED + "\tThe file references the Smartcard API" + constants.RESET)
+			if imp.lib == "wtsapi32.dll":
+				print(constants.RED + "\tThe file references the Remote Desktop Session Host Server" + constants.RESET)
+			if imp.lib == "activeds.lib" or imp.lib == "adsiid.lib":
+				print(constants.RED + "\tThe file references the Active Directory (AD)" + constants.RESET)
+			if imp.lib == "ntdll.dll" or imp.lib == "ntoskrnl.dll":
+				print(constants.RED + "\tThe file references the Windows Native API" + constants.RESET)
+			if imp.lib == "wsnmp32.dll" or imp.lib == "wsnmp32.lib" or imp.lib == "snmpapi.dll":
+				print(constants.RED + "\tThe file references the Simple Network Management Protocol (SNMP)" + constants.RESET)
+			if imp.lib == "wldap32.dll" or imp.lib == "wldap32.lib":
+				print(constants.RED + "\tThe file references the Lightweight Directory Access Protocol (LDAP)" + constants.RESET)
+			if imp.lib == "advapi32.dll" or imp.lib == "advapi32.lib":
+				print(constants.RED + "\tThe file modifies the Registry" + constants.RESET)
+	
 	def __getImports(self):
 		self.imports = []
 		for i in self.peFile.imports:
