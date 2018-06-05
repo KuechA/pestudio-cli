@@ -417,11 +417,9 @@ class PeAnalyzer:
 		res = {"summary": {"blacklisted": str(len(self.blacklistedRes)), "total": str(len(self.resources))}}
 		
 		res["blacklisted"] = self.blacklistedRes
-		blacklisted = ET.SubElement(resources, "blacklisted")
 		
 		languages = self.__get_languages()
 		
-		allResources = ET.SubElement(resources, "resource-list")
 		res["resource-list"] = []
 		for resource in self.resources:
 			res["resource-list"].append({"type": str(resource.type), "name": str(resource.name),
@@ -543,9 +541,9 @@ class PeAnalyzer:
 		return root
 	
 	def addTLSJson(self, jsonDict):
-		if not self.peFile.has_tls:
-			return
 		jsonDict["TlsCallbacks"] = []
+		if not self.peFile.has_tls:
+			return jsonDict
 		table_entry_address = self.peFile.tls.addressof_callbacks
 		callback = self.peFile.get_content_from_virtual_address(table_entry_address, 4)
 		callback = '0x' + "".join(["{0:02x}".format(x) for x in callback[::-1]])
@@ -731,7 +729,7 @@ class PeAnalyzer:
 	def addAllStringsJson(self, jsonDict):
 		if self.strings is None:
 			self.searchAllStrings()
-		jsonDict["Strings"] = self.strings
+		jsonDict["Strings"] = [str(s) for s in self.strings]
 		return jsonDict
 	
 	def printExports(self):

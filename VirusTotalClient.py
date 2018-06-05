@@ -97,7 +97,7 @@ class VirusTotalClient:
 		result = {"summary": {"positives": str(self.report['positives']), "total": str(self.report['total'])}}
 		result["details"] = []
 		for test, result in self.report["scans"].items():
-			result["details"].append({"engine": str(test), "version": str(result['version'], "result": str(result['result']))})
+			result["details"].append({"engine": str(test), "version": str(result['version']), "result": str(result['result'])})
 		
 		jsonDict["VirusTotal"] = result
 		return jsonDict
