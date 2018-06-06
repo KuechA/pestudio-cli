@@ -215,21 +215,16 @@ class PeAnalyzer:
 		self.checkImphashes()
 	
 	def checkFeatures(self):
+		if self.imports is None:
+			self.__getImports()
+		# TODO: we can also print it as table with the severity (and sum up the severity over all things)
+		features = ET.parse("xml/api_features.xml").getroot().find('features')
 		for imp in self.imports:
-			if imp.lib == "smartcard.dll":
-				print(constants.RED + "\tThe file references the Smartcard API" + constants.RESET)
-			if imp.lib == "wtsapi32.dll":
-				print(constants.RED + "\tThe file references the Remote Desktop Session Host Server" + constants.RESET)
-			if imp.lib == "activeds.lib" or imp.lib == "adsiid.lib":
-				print(constants.RED + "\tThe file references the Active Directory (AD)" + constants.RESET)
-			if imp.lib == "ntdll.dll" or imp.lib == "ntoskrnl.dll":
-				print(constants.RED + "\tThe file references the Windows Native API" + constants.RESET)
-			if imp.lib == "wsnmp32.dll" or imp.lib == "wsnmp32.lib" or imp.lib == "snmpapi.dll":
-				print(constants.RED + "\tThe file references the Simple Network Management Protocol (SNMP)" + constants.RESET)
-			if imp.lib == "wldap32.dll" or imp.lib == "wldap32.lib":
-				print(constants.RED + "\tThe file references the Lightweight Directory Access Protocol (LDAP)" + constants.RESET)
-			if imp.lib == "advapi32.dll" or imp.lib == "advapi32.lib":
-				print(constants.RED + "\tThe file modifies the Registry" + constants.RESET)
+			for f in features:
+				if f.attrib['enable'] == "1" and not f.find('libs') is None:
+					for lib in f.find('libs').findall('lib'):
+						if lib == imp.lib:
+							print(constants.RED + "\t" + f.find('description').text + constants.RESET)
 	
 	def __getImports(self):
 		self.imports = []
