@@ -8,6 +8,15 @@ Our goal is the implementation of a python-based command-line tool which can be 
 * Check for suspicious resources
 * Examine the strings of the binary to find blacklisted values
 * Show various information and highlight anomalies about the PE file like the PE header (time date stamp in the future), TLS callbacks or the relocations
+* Check the presence of more than 100 features in the PE file.
+* On top, we check various suspicious values, among others a high entropy, known imphashes, anomalies of the entry-point address, sections, headers, data, ...
+
+We support multiple output formats and make the output result highly configurable:
+* Many options can be used to specify which analysis should be performed
+* Output an xml file containing the desired information
+* Output a JSON representation with the requested information
+* A human-readable representation containing all the requested information at once
+* An interactive mode can be used in order to show only selected information at a time
 
 ### Dependencies
 * prettytable python library: `pip3 install prettytable`
