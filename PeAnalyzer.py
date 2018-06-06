@@ -217,14 +217,21 @@ class PeAnalyzer:
 	def checkFeatures(self):
 		if self.imports is None:
 			self.__getImports()
+		featureSet = set()
 		# TODO: we can also print it as table with the severity (and sum up the severity over all things)
-		features = ET.parse("xml/api_features.xml").getroot().find('features')
-		for imp in self.imports:
-			for f in features:
-				if f.attrib['enable'] == "1" and not f.find('libs') is None:
-					for lib in f.find('libs').findall('lib'):
-						if lib == imp.lib:
-							print(constants.RED + "\t" + f.find('description').text + constants.RESET)
+		for feature in ET.parse("xml/features.xml").getroot().find('features').findall('features'):
+			for lib in feature.find('libs').findall('lib'):
+				for fct in lib.find('fcts').findall('fct'):
+					if lib.attrib["name"] == "" and fct.text == "":
+						continue
+					matchingImps = filter(lambda imp: lib.attrib["name"] in imp.lib and fct.text in imp.fct, self.imports)
+					if len(matchingImps) > 0:
+						id = fct.attrib["id"]
+						featureSet.add(id)
+		print(featureSet)
+		for indicator in ET.parse("xml/indicators.xml").getroot().find('indicators').findall('indicator'):
+			if indicator.attrib['id'] in featureSet and indicator.attrib['enable'] == "1":
+				print(constants.RED + "\t" + indicator.text + constants.RESET)
 	
 	def __getImports(self):
 		self.imports = []
