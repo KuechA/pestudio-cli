@@ -92,7 +92,7 @@ class PeAnalyzer:
 			print(constants.RED + "\tThe file is code-less" + constants.RESET)
 		
 		# No manifest
-		if not self.peFile.resources_manager.has_manifest:
+		if self.peFile.has_resources and not self.peFile.resources_manager.has_manifest:
 			print(constants.RED + "\tThe file has no Manifest" + constants.RESET)
 		
 		# Entrypoint things
@@ -228,7 +228,7 @@ class PeAnalyzer:
 					if len(matchingImps) > 0:
 						id = fct.attrib["id"]
 						featureSet.add(id)
-		print(featureSet)
+		
 		for indicator in ET.parse("xml/indicators.xml").getroot().find('indicators').findall('indicator'):
 			if indicator.attrib['id'] in featureSet and indicator.attrib['enable'] == "1":
 				print(constants.RED + "\t" + indicator.text + constants.RESET)
