@@ -9,7 +9,7 @@ import re
 import constants
 import xml.etree.ElementTree as ET
 import json
-import sys
+import readline, glob # to path auto complete
 import pydoc
 import datetime
 
@@ -123,6 +123,14 @@ def interactiveMode(file = None):
 	print("Entering interactive mode...")
 	if file is None:
 		print("Please specify file to analyze")
+	
+	
+	def complete(text, state):
+		return (glob.glob(text+'*')+[None])[state]
+    	
+	readline.set_completer_delims(' \t\n;')
+	readline.parse_and_bind("tab: complete")
+	readline.set_completer(complete)
 	user_in = input(">> ")
 	while user_in != "q" and user_in != "quit":
 		if user_in.startswith("file ") or user_in.startswith("f "):

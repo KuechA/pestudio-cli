@@ -38,6 +38,7 @@
       <BlackListedImports id="40" enable="1">10</BlackListedImports>
       <BlackListedSectionNames id="41" enable="1">1</BlackListedSectionNames>
 
+	  <Passwords id="42" enable="1">0</Passwords>
       <HttpStrings id="43" enable="1">0</HttpStrings>
       <BlackListedExports id="44" enable="1">1</BlackListedExports>
       <UndocumentedFunctions id="45" enable="1">1</UndocumentedFunctions>
@@ -174,6 +175,7 @@
       <BlackListedImports id="40" enable="1">1</BlackListedImports>
       <BlackListedSectionNames id="41" enable="1">1</BlackListedSectionNames>
 
+	  <Passwords id="42" enable="1">3</Passwords>
       <HttpStrings id="43" enable="1">5</HttpStrings>
       <BlackListedExports id="44" enable="1">1</BlackListedExports>
       <UndocumentedFunctions id="45" enable="1">3</UndocumentedFunctions>

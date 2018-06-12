@@ -207,13 +207,54 @@ class PeAnalyzer:
 		min = int(mins.find('InitializedData').text)
 		max = int(maxs.find('InitializedData').text)
 		if not min < self.peFile.optional_header.sizeof_initialized_data < max:
-			print(constants.RED + "The size of initialized data reached the max (%d bytes) threshold" % self.peFile.optional_header.sizeof_initialized_data + constants.RESET)
+			print(constants.RED + "\tThe size of initialized data reached the max (%d bytes) threshold" % self.peFile.optional_header.sizeof_initialized_data + constants.RESET)
 	
 		# File references missing library
 		
 		# Check imphash
 		self.checkImphashes()
+		
+		# More then one executable sections
+		exe_sections = 0
+		for section in self.peFile.sections:
+			if section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE):
+				exe_sections += 1
+		if int(mins.find('ExecutableSections').text) < exe_sections < int(maxs.find('ExecutableSections').text):
+			print(constants.RED + "\tThe executable has %d executable sections" % exe_sections + constants.RESET)
+		else:
+			print(constants.GREEN + "\tThe executable has %d executable sections" % exe_sections + constants.RESET)
 	
+		# executable and writable sections
+		for section in self.peFile.sections:
+			if section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE) and section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_WRITE):
+				print(constants.RED + "\tThe executable has section(s) that are both executable and writable" + constants.RESET)
+		
+		# common passwords
+		if self.strings is None:
+			self.searchAllStrings()
+		
+		table = prettytable.PrettyTable()
+		table.field_names = ["String", "Group"]
+		stringsXml = ET.parse("xml/strings.xml").getroot()
+		password_checks = 0
+		# TODO: Maybe use regex instead of checking if the string is in the list of strings?
+		for r in stringsXml.find('psw').findall('item'):
+			if r.text in self.strings:
+				password_checks +=1
+		if not (int(mins.find('Passwords').text) <= password_checks < int(maxs.find('Passwords').text)):
+			print(constants.RED + "\tThe executable contains %d default passwords." % password_checks + constants.RESET)
+		else:
+			print(constants.GREEN + "\tThe executable contains %d default passwords." % password_checks + constants.RESET)
+			
+		# Size of code greater than size of code section
+		for section in self.peFile.sections:
+			if section.name == ".text":
+				code_sec_size = section.size
+				break
+		if self.peFile.optional_header.sizeof_code > code_sec_size:
+			print(constants.RED + "\tThe size of code (%i bytes) is bigger than the size (%i bytes) of code sections" % (self.peFile.optional_header.sizeof_code, code_sec_size))
+		else:
+			print(constants.GREEN + "\tThe size of code (%i bytes) matches the size of code sections" % self.peFile.optional_header.sizeof_code)
 	def checkFeatures(self):
 		if self.imports is None:
 			self.__getImports()
