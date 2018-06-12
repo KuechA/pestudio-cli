@@ -122,7 +122,7 @@ def interactiveMode(file = None):
 	vt = None
 	print("Entering interactive mode...")
 	if file is None:
-		print("Please specify file to analyze")
+		print("Please specify file to analyze or type help")
 	user_in = input(">> ")
 	while user_in != "q" and user_in != "quit":
 		if user_in.startswith("file ") or user_in.startswith("f "):
