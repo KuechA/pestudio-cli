@@ -224,6 +224,40 @@ class PeAnalyzer:
 		antiDbgFunctions = len(self.getAntiDebugFcts())
 		if min <= antiDbgFunctions <= max:
 			print(constants.RED + "\tThe file imports (%d) antidebug function(s)" % antiDbgFunctions + constants.RESET)
+	
+		# Keyboard functions
+		keyboardFcts, keys = self.getKeyboardFcts()
+		if len(keyboardFcts) > 0:
+			print(constants.RED + "\tThe file references (%i) keyboard functions" % len(keyboardFcts) + constants.RESET)
+		if keys > 0:
+			print(constants.RED + "\tThe file references (%i) keyboard keys like a Keylogger" % keys + constants.RESET)
+	
+	def getKeyboardFcts(self):
+		if self.imports is None:
+			self.__getImports()
+		root = ET.parse("xml/functions.xml").getroot()
+		
+		# Get all the blacklisted functions and libraries by name
+		keyboardFcts = []
+		for lib in root.find('libs').findall('lib'):
+			if lib.find('fcts') is None:
+				if 'group' in lib.attrib and lib.attrib['group'] == '22':
+					f = list(filter(lambda i: i.lib == lib.attrib['name'], self.imports))
+					keyboardFcts += f
+				continue
+			for fct in lib.find('fcts'):
+				if 'group' in fct.attrib and fct.attrib['group'] == '22':
+					f = list(filter(lambda i: i.lib == lib.attrib['name'] and i.fct == fct.text, self.imports))
+					keyboardFcts += f
+		
+		if self.strings is None:
+			self.searchAllStrings()
+		keys = 0
+		stringsXml = ET.parse("xml/strings.xml").getroot()
+		for r in stringsXml.find('keys').findall('key'):
+			if r.text in self.strings:
+				keys += 1
+		return keyboardFcts, keys
 		
 	def getAntiDebugFcts(self):
 		if self.imports is None:
