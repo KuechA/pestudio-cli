@@ -193,7 +193,7 @@ class PeAnalyzer:
 		
 		min = int(mins.find('SharedSections').text)
 		max = int(maxs.find('SharedSections').text)
-		if not min < sharedSect < max:
+		if not min <= sharedSect <= max:
 			print(constants.RED + "\tThe shared section(s) (%d) reached the max (%d) threshold" % (sharedSect, max) + constants.RESET)
 		
 		# Check if first section is writable or last section is executable
@@ -255,6 +255,74 @@ class PeAnalyzer:
 			print(constants.RED + "\tThe size of code (%i bytes) is bigger than the size (%i bytes) of code sections" % (self.peFile.optional_header.sizeof_code, code_sec_size))
 		else:
 			print(constants.GREEN + "\tThe size of code (%i bytes) matches the size of code sections" % self.peFile.optional_header.sizeof_code)
+			
+		# Missing DOS-Stub
+		if len(self.peFile.dos_stub) == 0:
+			print(constants.RED + "The dos-stub is missing" + constants.RESET)
+		
+		# Number of anti-debugging functions
+		min = int(mins.find('AntidebugFunctions').text)
+		max = int(maxs.find('AntidebugFunctions').text)
+		antiDbgFunctions = len(self.getAntiDebugFcts())
+		if min <= antiDbgFunctions <= max:
+			print(constants.RED + "\tThe file imports (%d) antidebug function(s)" % antiDbgFunctions + constants.RESET)
+	
+		# Keyboard functions
+		keyboardFcts, keys = self.getKeyboardFcts()
+		if len(keyboardFcts) > 0:
+			print(constants.RED + "\tThe file references (%i) keyboard functions" % len(keyboardFcts) + constants.RESET)
+		if keys > 0:
+			print(constants.RED + "\tThe file references (%i) keyboard keys like a Keylogger" % keys + constants.RESET)
+	
+	def getKeyboardFcts(self):
+		if self.imports is None:
+			self.__getImports()
+		root = ET.parse("xml/functions.xml").getroot()
+		
+		# Get all the blacklisted functions and libraries by name
+		keyboardFcts = []
+		for lib in root.find('libs').findall('lib'):
+			if lib.find('fcts') is None:
+				if 'group' in lib.attrib and lib.attrib['group'] == '22':
+					f = list(filter(lambda i: i.lib == lib.attrib['name'], self.imports))
+					keyboardFcts += f
+				continue
+			for fct in lib.find('fcts'):
+				if 'group' in fct.attrib and fct.attrib['group'] == '22':
+					f = list(filter(lambda i: i.lib == lib.attrib['name'] and i.fct == fct.text, self.imports))
+					keyboardFcts += f
+		
+		if self.strings is None:
+			self.searchAllStrings()
+		keys = 0
+		stringsXml = ET.parse("xml/strings.xml").getroot()
+		for r in stringsXml.find('keys').findall('key'):
+			if r.text in self.strings:
+				keys += 1
+		return keyboardFcts, keys
+		
+	def getAntiDebugFcts(self):
+		if self.imports is None:
+			self.__getImports()
+		root = ET.parse("xml/functions.xml").getroot()
+		
+		# Get all the blacklisted functions and libraries by name
+		antiDbgFunctions = []
+		for lib in root.find('libs').findall('lib'):
+			if lib.find('fcts') is None:
+				if 'group' in lib.attrib and lib.attrib['group'] == '16':
+					f = list(filter(lambda i: i.lib == lib.attrib['name'], self.imports))
+					antiDbgFunctions += f
+				continue
+			for fct in lib.find('fcts'):
+				if 'group' in fct.attrib and fct.attrib['group'] == '16':
+					f = list(filter(lambda i: i.lib == lib.attrib['name'] and i.fct == fct.text, self.imports))
+					antiDbgFunctions += f
+		f = list(filter(lambda i: i.lib == 'kernel32.dll' and i.fct == 'IsDebuggerPresent', self.imports))
+		antiDbgFunctions += f
+		return antiDbgFunctions
+		
+>>>>>>> d6b1d69cdb1d7cb9296086790c1f4dff3d5cd2ae
 	def checkFeatures(self):
 		if self.imports is None:
 			self.__getImports()
@@ -331,14 +399,20 @@ class PeAnalyzer:
 			if lib.find('fcts') is None:
 				f = list(filter(lambda i: i.lib == lib.attrib['name'], self.imports))
 				for function in f:
-					function.group = groups[lib.attrib['group']]
+					if 'group' in lib.attrib:
+						function.group = groups[lib.attrib['group']]
+					else:
+						function.group = groups["--"]
 					function.blacklisted = True
 				self.suspiciousFunctions += f
 				continue
 			for fct in lib.find('fcts'):
 				f = list(filter(lambda i: i.lib == lib.attrib['name'] and i.fct == fct.text, self.imports))
 				for function in f:
-					function.group = groups[fct.attrib['group']]
+					if 'group' in fct.attrib:
+						function.group = groups[fct.attrib['group']]
+					else:
+						function.group = groups["--"]
 					function.blacklisted = True
 				self.suspiciousFunctions += f
 		# TODO: We can replace the suspicious functions with filtering for imports which are blacklisted

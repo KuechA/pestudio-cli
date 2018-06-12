@@ -122,7 +122,7 @@ def interactiveMode(file = None):
 	vt = None
 	print("Entering interactive mode...")
 	if file is None:
-		print("Please specify file to analyze")
+		print("Please specify file to analyze or type help")
 	
 	
 	def complete(text, state):
@@ -131,6 +131,7 @@ def interactiveMode(file = None):
 	readline.set_completer_delims(' \t\n;')
 	readline.parse_and_bind("tab: complete")
 	readline.set_completer(complete)
+	
 	user_in = input(">> ")
 	while user_in != "q" and user_in != "quit":
 		if user_in.startswith("file ") or user_in.startswith("f "):
