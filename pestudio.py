@@ -30,7 +30,7 @@ def parseCommandLineArguments():
 	parser.add_argument("--interactive", help="Use the tool in interactive mode.", action="store_true", dest="interactive")
 	return parser.parse_args()
 
-def collectIndicators(vt, peAnalyzer, matcher):
+def collectIndicators(vt, peAnalyzer, matcher, all = False):
 	print("Indicators:")
 	
 	if peAnalyzer.peFile is None:
@@ -50,69 +50,69 @@ def collectIndicators(vt, peAnalyzer, matcher):
 	except:
 		print(constants.BLUE + "\tNo connection to VirusTotal possible" + constants.RESET)
 	
-	peAnalyzer.printIndicators()
+	peAnalyzer.printIndicators(all)
 	peAnalyzer.checkFeatures()
 	
 	# Suspicious header information
 	timeDateStamp = datetime.datetime.fromtimestamp(peAnalyzer.peFile.header.time_date_stamps)
 	if timeDateStamp > datetime.datetime.now():
 		print("%s\tFile Header: Suspicious value for TimeDateStamp (%s)%s" % (constants.RED, str(timeDateStamp), constants.RESET))
-	else:
+	elif all:
 		print(constants.GREEN + "\tFile Header seems to be valid" + constants.RESET)
 	
 	# Blacklisted imports and suspicious number of imports
-	if peAnalyzer.checkImportNumber():
+	if not peAnalyzer.checkImportNumber():
 		print(constants.GREEN + "\tNumber of imports is in a reasonable range (%d)" % len(peAnalyzer.imports), constants.RESET)
-	else:
+	elif all:
 		print(constants.RED + "\tSuspicious number of imports (%d)" % len(peAnalyzer.imports) + constants.RESET)
 	
 	suspicious, totalImp = peAnalyzer.blacklistedImports()
 	if len(suspicious):
 		print(constants.RED + "\t%d out of %d imports are blacklisted" % (len(suspicious), len(peAnalyzer.imports)) + constants.RESET)
-	else:
+	elif all:
 		print(constants.GREEN + "\tNo blacklisted imports found" + constants.RESET)
 	
 	# Blacklisted resources
 	resources = peAnalyzer.blacklistedResources()
 	if len(resources):
 		print(constants.RED + "\t%d blacklisted resources found" % (len(resources)) + constants.RESET)
-	else:
+	elif all:
 		print(constants.GREEN + "\tNo blacklisted resources found" + constants.RESET)
 	
 	# tls callbacks
 	if peAnalyzer.peFile.has_tls:
 		print(constants.RED + "\tThe PE file uses TLS callbacks." + constants.RESET)
-	else:
+	elif all:
 		print(constants.GREEN + "\tNo TLS callbacks used PE file" + constants.RESET)
 	
 	# relocations
-	if not peAnalyzer.peFile.has_relocations:
-		print(constants.GREEN + "\tThe binary uses no relocations" + constants.RESET)
-	else:
+	if peAnalyzer.peFile.has_relocations:
 		print(constants.RED + "\tThe binary uses relocations" + constants.RESET)
+	elif all:
+		print(constants.GREEN + "\tThe binary uses no relocations" + constants.RESET)
 	
 	# Blacklisted strings
 	blacklisted, insults, keys = peAnalyzer.getBlacklistedStrings(False)
 	if insults > 0:
 		print(constants.RED + "\t%d insults found in the file" % (insults) + constants.RESET)
-	else:
+	elif all:
 		print(constants.GREEN + "\tNo insults found in the file" + constants.RESET)
 	
 	if keys > 0:
 		print(constants.RED + "\t%d keyboard keys are used by the file" % (keys) + constants.RESET)
-	else:
+	elif all:
 		print(constants.GREEN + "\tNo keyboard keys are used in the file" + constants.RESET)
 	
 	if blacklisted > 0:
 		print(constants.RED + "\t%d strings are blacklisted" % (blacklisted) + constants.RESET)
-	else:
+	elif all:
 		print(constants.GREEN + "\tNo blacklisted strings found" + constants.RESET)
 	
 	# Packer signatures
 	packers = matcher.findPackers()
 	if len(packers):
 		print(constants.RED + "\tThe signature of the following packer was found: " + str(packers) + constants.RESET)
-	else:
+	elif all:
 		print(constants.GREEN + "\tNo packer signature was found in the PE file" + constants.RESET)
 		
 
@@ -145,9 +145,14 @@ def interactiveMode(file = None):
 				peAnalyzer = PeAnalyzer(file)
 				matcher = SignatureMatcher(file)
 				vt = VirusTotalClient(file)
+		elif user_in != "help" and peAnalyzer is None:
+			print("Select a file first")
 		elif user_in == "header" or user_in == "h":
 			print("Printing header")
 			peAnalyzer.printHeaderInformation()
+		elif user_in == "sections":
+			print("Printing sections")
+			peAnalyzer.printSections()
 		elif user_in == "imports" or user_in == "i":
 			peAnalyzer.printImportInformation()
 		elif user_in == "exports" or user_in == "e":
@@ -174,6 +179,8 @@ def interactiveMode(file = None):
 				print(constants.GREEN + "No packer signature was found in the PE file" + constants.RESET)
 		elif user_in == "indicators":
 			collectIndicators(vt, peAnalyzer, matcher)
+		elif user_in == "indicators -a":
+			collectIndicators(vt, peAnalyzer, matcher, all)
 		else:
 			if user_in != "help":
 				print("Command '" + user_in + "' is unknown.")
@@ -182,15 +189,17 @@ def interactiveMode(file = None):
 			print("\tf/file <filename> - specify which file should be analyzed")
 			print("\tq/quit - quit the program")
 			print("\tindicators - show indicators of malware in the PE file")
+			print("\tindicators -a - show indicators of malware in the PE file (show all checks)")
 			print("\th/header - show information extracted from the header")
 			print("\ti/imports - show imports of the PE file")
 			print("\te/exports - show exports of the PE file")
 			print("\tr/resources - show resources of the PE file")
 			print("\tt/tlsCallbacks - show TLS callback addresses of the PE file")
 			print("\trelocations - show relocation table of the PE file")
+			print("\ts/signatures - find signatures of malicious patterns or packers in the PE file")
+			print("\tsections - show all sections in the file")
 			print("\tstrings -a - show all strings we can find in the PE file")
 			print("\tstrings -b - show blacklisted strings we can find in the PE file")
-			print("\ts/signatures - find signatures of malicious patterns or packers in the PE file")
 			print("\thelp - print this help text")
 		user_in = input(">> ")
 

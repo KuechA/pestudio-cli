@@ -41,7 +41,9 @@ class PeAnalyzer:
 			self.peFile = None
 		self.strings = None
 	
-	def printIndicators(self):
+	
+	
+	def printIndicators(self, all = False):
 		if self.peFile.name != self.file.split("/")[-1]: # TODO: Check if that's correct
 			print("\tName: " + self.peFile.name + " differs from file name " + self.file.split("/")[-1])
 		
@@ -52,11 +54,11 @@ class PeAnalyzer:
 		maxs = root.find('thresholds').find('maximums')
 		min = int(mins.find('Image').text)
 		max = int(maxs.find('Image').text)
-		if min <= self.peFile.optional_header.sizeof_image <= max:
-			print(constants.GREEN + "\tSize of image is reasonable (%d bytes)" % self.peFile.optional_header.sizeof_image + constants.RESET)	
-		else:
+		if not (min <= self.peFile.optional_header.sizeof_image <= max):
 			print(constants.RED + "\tSize %d bytes of image is outside reasonable range (%d - %d bytes)" % (self.peFile.optional_header.sizeof_image, min, max) + constants.RESET)
-		
+		elif all:
+			print(constants.GREEN + "\tSize of image is reasonable (%d bytes)" % self.peFile.optional_header.sizeof_image + constants.RESET)			
+
 		min = int(mins.find('file-header').text)
 		max = int(maxs.find('file-header').text)
 		#if min <= self.peFile.dos_header.header_size_in_paragraphs <= max: # TODO: This seems to be incorrect
@@ -66,10 +68,10 @@ class PeAnalyzer:
 		
 		min = int(mins.find('optional-header').text)
 		max = int(maxs.find('optional-header').text)
-		if min <= self.peFile.header.sizeof_optional_header <= max: # Not sure if that's correct
-			print(constants.GREEN + "\tSize of Optional Header is reasonable (%d bytes)" % self.peFile.header.sizeof_optional_header + constants.RESET)	
-		else:
+		if not (min <= self.peFile.header.sizeof_optional_header <= max): # Not sure if that's correct	
 			print(constants.RED + "\tSize %d bytes of Optional Header is outide reasonable range (%d - %d bytes)" % (self.peFile.header.sizeof_optional_header, min, max) + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tSize of Optional Header is reasonable (%d bytes)" % self.peFile.header.sizeof_optional_header + constants.RESET)
 		
 		# Content of certificate??, expired issuer, expired subject, no digital certificate
 		if not self.peFile.has_signature:
@@ -90,13 +92,18 @@ class PeAnalyzer:
 		min = int(mins.find('Code').text)
 		if min > self.peFile.optional_header.sizeof_code:
 			print(constants.RED + "\tThe file is code-less" + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tThe file has valid code size" + constants.RESET)
 		
 		# No manifest
 		if self.peFile.has_resources and not self.peFile.resources_manager.has_manifest:
 			print(constants.RED + "\tThe file has no Manifest" + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tThe file has a Manifest" + constants.RESET)
 		
 		# Entrypoint things
 		lastSection = False
+		not_exe_entry_point = 0
 		for section in self.peFile.sections:
 			lastSection = False
 			start = self.peFile.optional_header.imagebase + section.virtual_address
@@ -106,7 +113,11 @@ class PeAnalyzer:
 				if not section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE):
 					# Section is not marked as executable
 					print(constants.RED + "\tEntrypoint (%s) in section %s which is not executable" % (hex(self.peFile.entrypoint), section.name) + constants.RESET)
+					not_exe_entry_point += 1
 		
+		if all and not_exe_entry_point == 0:
+			print(constants.GREEN + "\tNo non-executable entrypoint found" + constants.RESET)
+			
 		if lastSection:
 			# The section of the entry point was the last section in the PE file
 			print(constants.RED + "\tEntrypoint is in last section" + constants.RESET)
@@ -114,9 +125,13 @@ class PeAnalyzer:
 		if self.peFile.optional_header.imagebase > self.peFile.entrypoint > self.peFile.optional_header.imagebase + self.peFile.optional_header.sizeof_image:
 			# Entry point outside file
 			print(constants.RED + "\tEntrypoint (%s) is outside the file." % (hex(self.peFile.entrypoint)) + constants.RESET)
-		
+		elif all:
+			print(constants.GREEN + "\tEntrypoint (%s) correctly located." % (hex(self.peFile.entrypoint)) + constants.RESET)
+
 		if self.peFile.entrypoint == 0:
 			print(constants.RED + "\tThe address of the entry-point is zero" + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tThe address of the entry-point is valid" + constants.RESET)
 		
 		# Invalid file checksum, checksum computed different to checksum
 		# File ratio of resources
@@ -128,15 +143,21 @@ class PeAnalyzer:
 				percentage = (rsrc_directory.section.size / self.peFile.optional_header.sizeof_image ) * 100
 				if not (min <= percentage <= max):
 					print(constants.RED + "\tThe file-ratio (%d) of the resources is suspicious" % (percentage) + constants.RESET)
-		
+				elif all:
+					print(constants.GREEN + "\tThe file-ratio (%d) of the resources seems reasonable" % (percentage) + constants.RESET)
+					
 		# PE file uses control flow guard
 		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.GUARD_CF):
 			print(constants.RED + "\tThe file implements Control Flow Guard (CFG)" + constants.RESET)
-		
+		elif all:
+			print(constants.GREEN + "\tThe file does not implement Control Flow Guard (CFG)" + constants.RESET)
+			
 		# PE file is a WDM device driver
 		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.WDM_DRIVER):
 			print(constants.RED + "\tThe file is a Device Driver" + constants.RESET)
-		
+		elif all:
+			print(constants.GREEN + "\tThe file is not a Device Driver" + constants.RESET)
+			
 		# PE file makes use of DEP protection
 		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.NX_COMPAT):
 			print(constants.RED + "\tThe file opts for Data Execution Prevention (DEP)" + constants.RESET)
@@ -164,7 +185,9 @@ class PeAnalyzer:
 		if self.peFile.has_configuration:
 			if isinstance(self.peFile.load_configuration, lief.PE.LoadConfigurationV2) and self.peFile.load_configuration.code_integrity.catalog == 0xFFFF:
 				print(constants.RED + "\tThe file ignores Code Integrity" + constants.RESET)
-		
+			else:
+				print(constants.RED + "\tThe file opts for Code Integrity" + constants.RESET)
+	    
 		# Get the pdb debug file name
 		data_dir = self.peFile.data_directory(lief.PE.DATA_DIRECTORY.DEBUG)
 		if data_dir.size != 0:
@@ -177,37 +200,48 @@ class PeAnalyzer:
 		# Suspicious debug timestamp
 		if self.peFile.has_debug:
 			dbg_time = datetime.datetime.fromtimestamp(self.peFile.debug.timestamp)
-			if dbg_time > time.now(): # TODO: There are more criteria for sure.
+			if dbg_time > datetime.datetime.now(): # TODO: There are more criteria for sure.
 				print(constants.RED + "The age (%s) of the debug file is suspicious" % (str(dbg_time)) + constants.RESET)
 		
 		# Check entropy of the sections, number of shared sections
 		min = int(mins.find('Entropy').text)
 		max = int(maxs.find('Entropy').text)
 		sharedSect = 0
+		suspicious_entropies = 0
 		for sect in self.peFile.sections:
 			if not min < sect.entropy < max:
 				print(constants.RED + "\tThe entropy %d of section %s is suspicious" % (sect.entropy, sect.name) + constants.RESET)
-			
+				suspicious_entropies += 1
 			if sect.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_SHARED):
 				sharedSect += 1
-		
+		if all and suspicious_entropies == 0:
+			print(constants.GREEN + "\tAll sections entropies seem reasonable" + constants.RESET)
+			
 		min = int(mins.find('SharedSections').text)
 		max = int(maxs.find('SharedSections').text)
 		if not min <= sharedSect <= max:
 			print(constants.RED + "\tThe shared section(s) (%d) reached the max (%d) threshold" % (sharedSect, max) + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tShared section(s) (%d) below the max (%d) threshold" % (sharedSect, max) + constants.RESET)
 		
 		# Check if first section is writable or last section is executable
 		if list(self.peFile.sections)[0].has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_WRITE):
 			print(constants.RED + "\tThe first section (name:%s) is writable" % (self.peFile.sections[0].name) + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tThe first section (name:%s) is not writable" % (self.peFile.sections[0].name) + constants.RESET)
 		
 		if list(self.peFile.sections)[-1].has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE):
 			print(constants.RED + "\tThe last section (name:%s) is executable" % (self.peFile.sections[0].name) + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tThe last section (name:%s) is not executable" % (self.peFile.sections[0].name) + constants.RESET)
 		
 		# Size of initialized data
 		min = int(mins.find('InitializedData').text)
 		max = int(maxs.find('InitializedData').text)
 		if not min < self.peFile.optional_header.sizeof_initialized_data < max:
-			print(constants.RED + "\tThe size of initialized data reached the max (%d bytes) threshold" % self.peFile.optional_header.sizeof_initialized_data + constants.RESET)
+			print(constants.RED + "\tThe size of initialized data (%d bytes) reached the max (%d bytes) threshold" % (self.peFile.optional_header.sizeof_initialized_data, max) + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tThe size of initialized data (%d bytes) is reasonable" % self.peFile.optional_header.sizeof_initialized_data + constants.RESET)
 	
 		# File references missing library
 		
@@ -221,14 +255,20 @@ class PeAnalyzer:
 				exe_sections += 1
 		if int(mins.find('ExecutableSections').text) < exe_sections < int(maxs.find('ExecutableSections').text):
 			print(constants.RED + "\tThe executable has %d executable sections" % exe_sections + constants.RESET)
-		else:
+		elif all:
 			print(constants.GREEN + "\tThe executable has %d executable sections" % exe_sections + constants.RESET)
 	
 		# executable and writable sections
+		count_exe_write_sec = 0
 		for section in self.peFile.sections:
 			if section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE) and section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_WRITE):
-				print(constants.RED + "\tThe executable has section(s) that are both executable and writable" + constants.RESET)
-		
+				count_exe_write_sec +=1
+				
+		if count_exe_write_sec > 0:
+			print(constants.RED + "\tThe executable has %d section(s) that is/are both executable and writable" % count_exe_write_sec + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tThe executable has %d section(s) that is/are both executable and writable" % count_exe_write_sec + constants.RESET)
+				
 		# common passwords
 		if self.strings is None:
 			self.searchAllStrings()
@@ -243,7 +283,7 @@ class PeAnalyzer:
 				password_checks +=1
 		if not (int(mins.find('Passwords').text) <= password_checks < int(maxs.find('Passwords').text)):
 			print(constants.RED + "\tThe executable contains %d default passwords." % password_checks + constants.RESET)
-		else:
+		elif all:
 			print(constants.GREEN + "\tThe executable contains %d default passwords." % password_checks + constants.RESET)
 			
 		# Size of code greater than size of code section
@@ -253,27 +293,32 @@ class PeAnalyzer:
 				break
 		if self.peFile.optional_header.sizeof_code > code_sec_size:
 			print(constants.RED + "\tThe size of code (%i bytes) is bigger than the size (%i bytes) of code sections" % (self.peFile.optional_header.sizeof_code, code_sec_size))
-		else:
+		elif all:
 			print(constants.GREEN + "\tThe size of code (%i bytes) matches the size of code sections" % self.peFile.optional_header.sizeof_code)
 			
 		# Missing DOS-Stub
 		if len(self.peFile.dos_stub) == 0:
-			print(constants.RED + "The dos-stub is missing" + constants.RESET)
-		
+			print(constants.RED + "\tThe dos-stub is missing" + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tThe dos-stub is present" + constants.RESET)
 		# Number of anti-debugging functions
 		min = int(mins.find('AntidebugFunctions').text)
 		max = int(maxs.find('AntidebugFunctions').text)
 		antiDbgFunctions = len(self.getAntiDebugFcts())
-		if min <= antiDbgFunctions <= max:
-			print(constants.RED + "\tThe file imports (%d) antidebug function(s)" % antiDbgFunctions + constants.RESET)
-	
+		if not (min <= antiDbgFunctions <= max):
+			print(constants.RED + "\tThe file imports (%d) antidebug function(s), more than max threshold (%d)" % (antiDbgFunctions, max) + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tThe file imports (%d) antidebug function(s), less than min threshold (%d)" % (antiDbgFunctions, min) + constants.RESET)
+			
 		# Keyboard functions
 		keyboardFcts, keys = self.getKeyboardFcts()
 		if len(keyboardFcts) > 0:
 			print(constants.RED + "\tThe file references (%i) keyboard functions" % len(keyboardFcts) + constants.RESET)
 		if keys > 0:
 			print(constants.RED + "\tThe file references (%i) keyboard keys like a Keylogger" % keys + constants.RESET)
-	
+		if all and not (len(keyboardFcts) > 0 or keys > 0):
+			print(constants.GREEN + "\tThe file does not references keyboard keys or functions" + constants.RESET)
+			
 	def getKeyboardFcts(self):
 		if self.imports is None:
 			self.__getImports()
@@ -322,7 +367,6 @@ class PeAnalyzer:
 		antiDbgFunctions += f
 		return antiDbgFunctions
 		
->>>>>>> d6b1d69cdb1d7cb9296086790c1f4dff3d5cd2ae
 	def checkFeatures(self):
 		if self.imports is None:
 			self.__getImports()
@@ -421,10 +465,10 @@ class PeAnalyzer:
 	def printImportInformation(self):
 		
 		reasonableNumber = self.checkImportNumber()
-		if reasonableNumber:
-			print(constants.GREEN + "Number of imports is in a reasonable range (%d)" % len(self.imports), constants.RESET)
-		else:
+		if not reasonableNumber:
 			print(constants.RED + "Suspicious number of imports (%d)" % len(self.imports) + constants.RESET)
+		elif all:
+			print(constants.GREEN + "Number of imports is in a reasonable range (%d)" % len(self.imports), constants.RESET)
 		
 		self.blacklistedImports()
 		if len(self.suspiciousFunctions):
@@ -657,7 +701,21 @@ class PeAnalyzer:
 			print("File Header:")
 		resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
 		print(resultString)
-
+		
+	def printSections(self):
+		table = prettytable.PrettyTable()
+		table.field_names = ["Name", "Size", "Virtual Size", "Offset", "Virtual address", "Entropy", "Permissions"]
+		
+		for section in self.peFile.sections:
+			rights = ""
+			rights += "R" if section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_READ) else "-"
+			rights += "W" if section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_WRITE) else "-"
+			rights += "X" if section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE) else "-"
+			table.add_row([section.name, section.size, section.virtual_size, section.offset, section.virtual_address, section.entropy, rights])
+		
+		resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
+		print(resultString)
+		
 	def addTLSXml(self, root):
 		tls = ET.SubElement(root, "TlsCallbacks")
 		if not self.peFile.has_tls:
