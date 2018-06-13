@@ -233,8 +233,6 @@ class PeAnalyzer:
 		if self.strings is None:
 			self.searchAllStrings()
 		
-		table = prettytable.PrettyTable()
-		table.field_names = ["String", "Group"]
 		stringsXml = ET.parse("xml/strings.xml").getroot()
 		password_checks = 0
 		# TODO: Maybe use regex instead of checking if the string is in the list of strings?
@@ -247,10 +245,10 @@ class PeAnalyzer:
 			print(constants.GREEN + "\tThe executable contains %d default passwords." % password_checks + constants.RESET)
 			
 		# Size of code greater than size of code section
+		code_sec_size = 0
 		for section in self.peFile.sections:
-			if section.name == ".text":
-				code_sec_size = section.size
-				break
+			if section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.CNT_CODE): # Before: section.name == ".text"
+				code_sec_size += section.size
 		if self.peFile.optional_header.sizeof_code > code_sec_size:
 			print(constants.RED + "\tThe size of code (%i bytes) is bigger than the size (%i bytes) of code sections" % (self.peFile.optional_header.sizeof_code, code_sec_size))
 		else:
@@ -264,7 +262,7 @@ class PeAnalyzer:
 		min = int(mins.find('AntidebugFunctions').text)
 		max = int(maxs.find('AntidebugFunctions').text)
 		antiDbgFunctions = len(self.getAntiDebugFcts())
-		if min <= antiDbgFunctions <= max:
+		if not min <= antiDbgFunctions <= max:
 			print(constants.RED + "\tThe file imports (%d) antidebug function(s)" % antiDbgFunctions + constants.RESET)
 	
 		# Keyboard functions
@@ -321,8 +319,7 @@ class PeAnalyzer:
 		f = list(filter(lambda i: i.lib == 'kernel32.dll' and i.fct == 'IsDebuggerPresent', self.imports))
 		antiDbgFunctions += f
 		return antiDbgFunctions
-		
->>>>>>> d6b1d69cdb1d7cb9296086790c1f4dff3d5cd2ae
+
 	def checkFeatures(self):
 		if self.imports is None:
 			self.__getImports()
