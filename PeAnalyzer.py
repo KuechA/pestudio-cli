@@ -250,10 +250,20 @@ class PeAnalyzer:
 			if section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.CNT_CODE): # Before: section.name == ".text"
 				code_sec_size += section.size
 		if self.peFile.optional_header.sizeof_code > code_sec_size:
-			print(constants.RED + "\tThe size of code (%i bytes) is bigger than the size (%i bytes) of code sections" % (self.peFile.optional_header.sizeof_code, code_sec_size))
+			print(constants.RED + "\tThe size of code (%i bytes) is bigger than the size (%i bytes) of code sections" % (self.peFile.optional_header.sizeof_code, code_sec_size) + constants.RESET)
 		else:
-			print(constants.GREEN + "\tThe size of code (%i bytes) matches the size of code sections" % self.peFile.optional_header.sizeof_code)
-			
+			print(constants.GREEN + "\tThe size of code (%i bytes) matches the size of code sections" % self.peFile.optional_header.sizeof_code + constants.RESET)
+		
+		# Suspicious section names
+		standardSectionNames = [".text", ".bss", ".rdata", ".data", ".idata", ".reloc"]
+		suspiciousSections = False
+		for section in self.peFile.sections:
+			if not section.name in standardSectionNames:
+				print(constants.RED + "\tSuspicious section name %s" % (section.name) + constants.RESET)
+				suspiciousSections = True
+		if not suspiciousSections:
+			print(constants.GREEN + "\tNo suspicious section names found" + constants.RESET)
+		
 		# Missing DOS-Stub
 		if len(self.peFile.dos_stub) == 0:
 			print(constants.RED + "The dos-stub is missing" + constants.RESET)
