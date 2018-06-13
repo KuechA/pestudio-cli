@@ -13,6 +13,13 @@ import readline, glob # to path auto complete
 import pydoc
 import datetime
 
+class Indicator:
+	def __init__(self, enable, severity, id, text):
+		self.enable = enable
+		self.severity = severity
+		self.id = id
+		self.text = text
+
 def parseCommandLineArguments():
 	parser = argparse.ArgumentParser(description='PE file analyzer. The default output is human-readable and structured in tables. If no file is specifies, the interactive mode is entered.')
 	parser.add_argument("-f", "--file", help="The file to analyze", required=False, dest="file")
@@ -30,8 +37,23 @@ def parseCommandLineArguments():
 	parser.add_argument("--interactive", help="Use the tool in interactive mode.", action="store_true", dest="interactive")
 	return parser.parse_args()
 
+def parseIndicators():
+	indicators = {}
+	root = ET.parse("xml/indicators.xml").getroot().find('indicators')
+	for indicator in root.findall('indicator'):
+		indicators[indicator.attrib['id']] = Indicator(indicator.attrib['enable'], indicator.attrib['severity'], indicator.attrib['id'], indicator.text)
+	
+	return indicators
+
 def collectIndicators(vt, peAnalyzer, matcher, all = False):
 	print("Indicators:")
+	
+	indicators = parseIndicators()
+	
+	score = 0
+	maxScore = 0
+	
+	table = prettytable.PrettyTable()
 	
 	if peAnalyzer.peFile is None:
 		print(constants.RED + "The file is not a PE file" + constants.RESET)
@@ -39,19 +61,28 @@ def collectIndicators(vt, peAnalyzer, matcher, all = False):
 	
 	# VirusTotal result
 	try:
-		#vt.getReport()
-		#if vt.report['positives']:
-		#	vtRes = constants.RED
-		#else:
-		#	vtRes = constants.GREEN
-		#vtRes += "\tVirusTotal result: " + str(vt.report['positives']) + " of " + str(vt.report['total']) + " tests are positive" + constants.RESET
-		#print(vtRes)
-		pass
+		rootThresholds = ET.parse("xml/thresholds.xml").getroot()
+		mins = rootThresholds.find('thresholds').find('minimums')
+		maxs = rootThresholds.find('thresholds').find('maximums')
+		vt.getReport()
+		min = int(mins.find('AntidebugFunctions').text)
+		max = int(maxs.find('AntidebugFunctions').text)
+		maxScore += int(indicators['1120'].severity)
+		if min <= vt.report['positives'] <= max:
+			vtRes = constants.GREEN + "\t"
+		else:
+			vtRes = constants.RED
+			score += int(indicators['1120'].severity)
+		vtRes += "VirusTotal result: " + str(vt.report['positives']) + " of " + str(vt.report['total']) + " tests are positive" + constants.RESET
+		if min <= vt.report['positives'] <= max:
+			print(vtRes)
+		else:
+			table.add_row([vtRes, indicators['1120'].severity])
 	except:
 		print(constants.BLUE + "\tNo connection to VirusTotal possible" + constants.RESET)
-	
-	peAnalyzer.printIndicators(all)
-	peAnalyzer.checkFeatures()
+
+	score, maxScore = peAnalyzer.printIndicators(indicators, score, maxScore, table, all)
+	score, maxScore = peAnalyzer.checkFeatures(indicators, score, maxScore, table)
 	
 	# Suspicious header information
 	timeDateStamp = datetime.datetime.fromtimestamp(peAnalyzer.peFile.header.time_date_stamps)
@@ -114,7 +145,9 @@ def collectIndicators(vt, peAnalyzer, matcher, all = False):
 		print(constants.RED + "\tThe signature of the following packer was found: " + str(packers) + constants.RESET)
 	elif all:
 		print(constants.GREEN + "\tNo packer signature was found in the PE file" + constants.RESET)
-		
+	
+	table.field_names = ["Description", "Severity(" + str(score) + "/" + str(maxScore) + ")"]
+	print(table)
 
 def interactiveMode(file = None):
 	peAnalyzer = None
