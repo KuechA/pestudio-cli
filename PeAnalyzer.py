@@ -41,24 +41,25 @@ class PeAnalyzer:
 			self.peFile = None
 		self.strings = None
 	
-	def printIndicators(self):
-		if self.peFile.name != self.file.split("/")[-1]: # TODO: Check if that's correct
-			print("\tName: " + self.peFile.name + " differs from file name " + self.file.split("/")[-1])
-		
+	def printIndicators(self, indicators, score, maxScore, table):
 		# Suspicious sizes: File, Optional header, file header, certificate
 		# TODO: Read severity from indicators.xml?
 		root = ET.parse("xml/thresholds.xml").getroot()
 		mins = root.find('thresholds').find('minimums')
 		maxs = root.find('thresholds').find('maximums')
+		
 		min = int(mins.find('Image').text)
 		max = int(maxs.find('Image').text)
+		maxScore += int(indicators['1207'].severity)
 		if min <= self.peFile.optional_header.sizeof_image <= max:
 			print(constants.GREEN + "\tSize of image is reasonable (%d bytes)" % self.peFile.optional_header.sizeof_image + constants.RESET)	
 		else:
-			print(constants.RED + "\tSize %d bytes of image is outside reasonable range (%d - %d bytes)" % (self.peFile.optional_header.sizeof_image, min, max) + constants.RESET)
+			score += int(indicators['1207'].severity)
+			str = constants.RED + "The value of 'SizeOfImage' (%d) is suspicious" % (self.peFile.optional_header.sizeof_image) + constants.RESET
+			table.add_row([str, indicators['1207'].severity])
 		
-		min = int(mins.find('file-header').text)
-		max = int(maxs.find('file-header').text)
+		#min = int(mins.find('file-header').text)
+		#max = int(maxs.find('file-header').text)
 		#if min <= self.peFile.dos_header.header_size_in_paragraphs <= max: # TODO: This seems to be incorrect
 		#	print(constants.GREEN + "\tSize of File Header is reasonable (%d bytes)" % self.peFile.sizeof_headers + constants.RESET)	
 		#else:
@@ -66,20 +67,26 @@ class PeAnalyzer:
 		
 		min = int(mins.find('optional-header').text)
 		max = int(maxs.find('optional-header').text)
+		maxScore += int(indicators['1004'].severity)
 		if min <= self.peFile.header.sizeof_optional_header <= max: # Not sure if that's correct
 			print(constants.GREEN + "\tSize of Optional Header is reasonable (%d bytes)" % self.peFile.header.sizeof_optional_header + constants.RESET)	
 		else:
-			print(constants.RED + "\tSize %d bytes of Optional Header is outide reasonable range (%d - %d bytes)" % (self.peFile.header.sizeof_optional_header, min, max) + constants.RESET)
+			score += int(indicators['1004'].severity)
+			str = constants.RED + "The size (%d bytes) of the optional-header is suspicious" % (self.peFile.header.sizeof_optional_header) + constants.RESET
+			table.add_row([str, indicators['1004'].severity])
 		
 		# Content of certificate??, expired issuer, expired subject, no digital certificate
 		if not self.peFile.has_signature:
 			print(constants.RED + "\tThe PE file has no digital signature" + constants.RESET)
 		else:
+			maxScore += int(indicators['1039'].severity)
 			for cert in self.peFile.signature.certificates:
 				cert_from = datetime.datetime.fromtimestamp(cert.valid_from)
 				cert_to = datetime.datetime.fromtimestamp(cert.valid_to)
 				if cert_from > datetime.datetime.now() or cert_to < datetime.datetime.now():
-					print(constants.RED + "\tDigital certificate is used which is not valid (from: %s to: %s)" + (str(cert_from), str(cert_to)) + constants.RESET)
+					score += int(indicators['1039'].severity)
+					str = constants.RED + "Digital certificate is used which is not valid (from: %s to: %s)" + (str(cert_from), str(cert_to)) + constants.RESET
+					table.add_row([str, indicators['1039'].severity])
 			# TODO: We should check if the signature is valid but this seems to be ugly
 		
 		# Self-extractable file??
@@ -88,15 +95,22 @@ class PeAnalyzer:
 		
 		# Code-less file
 		min = int(mins.find('Code').text)
+		maxScore += int(indicators['1027'].severity)
 		if min > self.peFile.optional_header.sizeof_code:
-			print(constants.RED + "\tThe file is code-less" + constants.RESET)
+			score += int(indicators['1027'].severity)
+			str = constants.RED + "The file is code-less" + constants.RESET
+			table.add_row([str, indicators['1027'].severity])
 		
 		# No manifest
+		maxScore += int(indicators['1043'].severity)
 		if self.peFile.has_resources and not self.peFile.resources_manager.has_manifest:
-			print(constants.RED + "\tThe file has no Manifest" + constants.RESET)
+			score += int(indicators['1043'].severity)
+			str = constants.RED + "The file has no Manifest" + constants.RESET
+			table.add_row([str, indicators['1043'].severity])
 		
 		# Entrypoint things
 		lastSection = False
+		maxScore += int(indicators['1035'].severity)
 		for section in self.peFile.sections:
 			lastSection = False
 			start = self.peFile.optional_header.imagebase + section.virtual_address
@@ -105,80 +119,134 @@ class PeAnalyzer:
 				lastSection = True
 				if not section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE):
 					# Section is not marked as executable
-					print(constants.RED + "\tEntrypoint (%s) in section %s which is not executable" % (hex(self.peFile.entrypoint), section.name) + constants.RESET)
+					score += int(indicators['1035'].severity)
+					str = constants.RED + "Entrypoint (%s) in section %s which is not executable" % (hex(self.peFile.entrypoint), section.name) + constants.RESET
+					table.add_row([str, indicators['1035'].severity])
 		
+		maxScore += int(indicators['1605'].severity)
 		if lastSection:
 			# The section of the entry point was the last section in the PE file
-			print(constants.RED + "\tEntrypoint is in last section" + constants.RESET)
+			score += int(indicators['1605'].severity)
+			str = constants.RED + "Entrypoint is in last section" + constants.RESET
+			table.add_row([str, indicators['1605'].severity])
 		
+		maxScore += int(indicators['1037'].severity)
 		if self.peFile.optional_header.imagebase > self.peFile.entrypoint > self.peFile.optional_header.imagebase + self.peFile.optional_header.sizeof_image:
 			# Entry point outside file
-			print(constants.RED + "\tEntrypoint (%s) is outside the file." % (hex(self.peFile.entrypoint)) + constants.RESET)
+			score  += int(indicators['1037'].severity)
+			str = constants.RED + "Entrypoint (%s) is outside the file." % (hex(self.peFile.entrypoint)) + constants.RESET
+			table.add_row([str, indicators['1037'].severity])
 		
+		maxScore += int(indicators['1211'].severity)
 		if self.peFile.entrypoint == 0:
-			print(constants.RED + "\tThe address of the entry-point is zero" + constants.RESET)
+			score  += int(indicators['1211'].severity)
+			str = constants.RED + "The address of the entry-point is zero" + constants.RESET
+			table.add_row([str, indicators['1211'].severity])
 		
-		# Invalid file checksum, checksum computed different to checksum
+		# TODO: Invalid file checksum, checksum computed different to checksum
+		
 		# File ratio of resources
 		if self.peFile.has_resources:
 			rsrc_directory = self.peFile.data_directory(lief.PE.DATA_DIRECTORY.RESOURCE_TABLE)
 			if rsrc_directory.has_section:
 				min = int(mins.find('ProcentResource').text)
 				max = int(maxs.find('ProcentResource').text)
+				maxScore += int(indicators['1220'].severity)
 				percentage = (rsrc_directory.section.size / self.peFile.optional_header.sizeof_image ) * 100
 				if not (min <= percentage <= max):
-					print(constants.RED + "\tThe file-ratio (%d) of the resources is suspicious" % (percentage) + constants.RESET)
+					score += int(indicators['1220'].severity)
+					str = constants.RED + "The file-ratio (%d) of the resources is suspicious" % (percentage) + constants.RESET
+					table.add_row([str, indicators['1220'].severity])
 		
 		# PE file uses control flow guard
+		maxScore += int(indicators['1050'].severity)
 		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.GUARD_CF):
-			print(constants.RED + "\tThe file implements Control Flow Guard (CFG)" + constants.RESET)
+			score += int(indicators['1211'].severity)
+			str = constants.RED + "The file implements Control Flow Guard (CFG)" + constants.RESET
+			table.add_row([str, indicators['1050'].severity])
 		
 		# PE file is a WDM device driver
+		maxScore += int(indicators['1056'].severity)
 		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.WDM_DRIVER):
-			print(constants.RED + "\tThe file is a Device Driver" + constants.RESET)
+			score += int(indicators['1056'].severity)
+			str = constants.RED + "The file is a Device Driver" + constants.RESET
+			table.add_row([str, indicators['1056'].severity])
 		
 		# PE file makes use of DEP protection
+		maxScore += int(indicators['1100'].severity)
+		maxScore += int(indicators['1101'].severity)
 		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.NX_COMPAT):
-			print(constants.RED + "\tThe file opts for Data Execution Prevention (DEP)" + constants.RESET)
+			score += int(indicators['1100'].severity)
+			str = constants.RED + "The file opts for Data Execution Prevention (DEP)" + constants.RESET
+			table.add_row([str, indicators['1100'].severity])
 		else:
-			print(constants.RED + "\tThe file ignores Data Execution Prevention (DEP)" + constants.RESET)
+			score += int(indicators['1101'].severity)
+			str = constants.RED + "The file ignores Data Execution Prevention (DEP)" + constants.RESET
+			table.add_row([str, indicators['1101'].severity])
 		
 		# PE file makes use of ASLR
+		maxScore += int(indicators['1102'].severity)
+		maxScore += int(indicators['1103'].severity)
 		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.DYNAMIC_BASE):
-			print(constants.RED + "\tThe file opts for Address Space Layout Randomization (ASLR)" + constants.RESET)
+			score += int(indicators['1102'].severity)
+			str = constants.RED + "The file opts for Address Space Layout Randomization (ASLR)" + constants.RESET
+			table.add_row([str, indicators['1102'].severity])
 		else:
-			print(constants.RED + "\tThe file ignores Address Space Layout Randomization (ASLR)" + constants.RESET)
+			score += int(indicators['1103'].severity)
+			str = constants.RED + "The file ignores Address Space Layout Randomization (ASLR)" + constants.RESET
+			table.add_row([str, indicators['1103'].severity])
 		
 		# PE file does not use of structured error handling (SEH)
+		maxScore += int(indicators['1105'].severity)
 		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.NO_SEH):
-			print(constants.RED + "\tThe file ignores Structured Exception Handling (SEH)" + constants.RESET)
+			score += int(indicators['1105'].severity)
+			str = constants.RED + "The file ignores Structured Exception Handling (SEH)" + constants.RESET
+			table.add_row([str, indicators['1105'].severity])
 		
 		# PE file does not use GS
+		maxScore += int(indicators['1106'].severity)
+		maxScore += int(indicators['1107'].severity)
 		if self.peFile.has_configuration:
 			if self.peFile.load_configuration.security_cookie == 0:
-				print(constants.RED + "\tThe file ignores cookies on the stack (GS)" + constants.RESET)
+				score += int(indicators['1107'].severity)
+				str = constants.RED + "The file ignores cookies on the stack (GS)" + constants.RESET
+				table.add_row([str, indicators['1107'].severity])
 			else:
-				print(constants.RED + "\tThe file opts for cookies on the stack (GS)" + constants.RESET)
+				score += int(indicators['1106'].severity)
+				str = constants.RED + "The file opts for cookies on the stack (GS)" + constants.RESET
+				table.add_row([str, indicators['1106'].severity])
 		
 		# PE file does not use code integrity
+		maxScore += int(indicators['1109'].severity)
 		if self.peFile.has_configuration:
 			if isinstance(self.peFile.load_configuration, lief.PE.LoadConfigurationV2) and self.peFile.load_configuration.code_integrity.catalog == 0xFFFF:
-				print(constants.RED + "\tThe file ignores Code Integrity" + constants.RESET)
+				score += int(indicators['1109'].severity)
+				str = constants.RED + "The file ignores Code Integrity" + constants.RESET
+				table.add_row([str, indicators['1109'].severity])
 		
 		# Get the pdb debug file name
 		data_dir = self.peFile.data_directory(lief.PE.DATA_DIRECTORY.DEBUG)
+		maxScore += int(indicators['1152'].severity)
+		maxScore += int(indicators['1153'].severity)
 		if data_dir.size != 0:
-			dbg_file_name_lst = self.peFile.get_content_from_virtual_address(data_dir.rva, self.peFile.optional_header.imagebase + self.peFile.data_dir.size - 24)
+			dbg_file_name_lst = self.peFile.get_content_from_virtual_address(self.peFile.optional_header.imagebase + data_dir.rva, data_dir.size - 24)
 			dbg_file_name = "".join(chr(c) for c in dbg_file_name_lst)
-			print(constants.RED + "\tThe file references a debug symbols file (path: %s)" % (dbg_file_name) + constants.RESET)
+			score += int(indicators['1152'].severity)
+			str = constants.RED + "The file references a debug symbols file (path: %s)" % (dbg_file_name) + constants.RESET
+			table.add_row([str, indicators['1152'].severity])
 			if dbg_file_name.split(".")[-1] != ".pdb":
-				print(constants.RED + "\tThe debug file name extension %s is suspicous" % (dbg_file_name.split(".")[-1]) + constants.RESET)
+				score += int(indicators['1153'].severity)
+				str = constants.RED + "The debug file name extension %s is suspicous" % (dbg_file_name.split(".")[-1]) + constants.RESET
+				table.add_row([str, indicators['1152'].severity])
 		
 		# Suspicious debug timestamp
+		maxScore += int(indicators['1157'].severity)
 		if self.peFile.has_debug:
 			dbg_time = datetime.datetime.fromtimestamp(self.peFile.debug.timestamp)
-			if dbg_time > time.now(): # TODO: There are more criteria for sure.
-				print(constants.RED + "The age (%s) of the debug file is suspicious" % (str(dbg_time)) + constants.RESET)
+			if dbg_time > time.now(): # TODO: Check if there are more criteria
+				score += int(indicators['1157'].severity)
+				str = constants.RED + "The age (%s) of the debug file is suspicious" % (str(dbg_time)) + constants.RESET
+				table.add_row([str, indicators['1157'].severity])
 		
 		# Check entropy of the sections, number of shared sections
 		min = int(mins.find('Entropy').text)
@@ -193,23 +261,35 @@ class PeAnalyzer:
 		
 		min = int(mins.find('SharedSections').text)
 		max = int(maxs.find('SharedSections').text)
+		maxScore += int(indicators['1213'].severity)
 		if not min <= sharedSect <= max:
-			print(constants.RED + "\tThe shared section(s) (%d) reached the max (%d) threshold" % (sharedSect, max) + constants.RESET)
+			score += int(indicators['1213'].severity)
+			str = constants.RED + "The shared section(s) (%d) reached the max (%d) threshold" % (sharedSect, max) + constants.RESET
+			table.add_row([str, indicators['1213'].severity])
 		
 		# Check if first section is writable or last section is executable
+		maxScore += int(indicators['1223'].severity)
 		if list(self.peFile.sections)[0].has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_WRITE):
-			print(constants.RED + "\tThe first section (name:%s) is writable" % (self.peFile.sections[0].name) + constants.RESET)
+			score += int(indicators['1223'].severity)
+			str = constants.RED + "The first section (name:%s) is writable" % (self.peFile.sections[0].name) + constants.RESET
+			table.add_row([str, indicators['1223'].severity])
 		
+		maxScore += int(indicators['1222'].severity)
 		if list(self.peFile.sections)[-1].has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE):
-			print(constants.RED + "\tThe last section (name:%s) is executable" % (self.peFile.sections[0].name) + constants.RESET)
+			score += int(indicators['1222'].severity)
+			str = constants.RED + "The last section (name:%s) is executable" % (self.peFile.sections[0].name) + constants.RESET
+			table.add_row([str, indicators['1222'].severity])
 		
 		# Size of initialized data
 		min = int(mins.find('InitializedData').text)
 		max = int(maxs.find('InitializedData').text)
+		maxScore += int(indicators['1208'].severity)
 		if not min < self.peFile.optional_header.sizeof_initialized_data < max:
-			print(constants.RED + "\tThe size of initialized data reached the max (%d bytes) threshold" % self.peFile.optional_header.sizeof_initialized_data + constants.RESET)
-	
-		# File references missing library
+			score += int(indicators['1208'].severity)
+			str = constants.RED + "The size of initialized data reached the max (%d bytes) threshold" % self.peFile.optional_header.sizeof_initialized_data + constants.RESET
+			table.add_row([str, indicators['1208'].severity])
+		
+		# TODO: File references missing library
 		
 		# Check imphash
 		self.checkImphashes()
@@ -219,15 +299,22 @@ class PeAnalyzer:
 		for section in self.peFile.sections:
 			if section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE):
 				exe_sections += 1
-		if int(mins.find('ExecutableSections').text) < exe_sections < int(maxs.find('ExecutableSections').text):
-			print(constants.RED + "\tThe executable has %d executable sections" % exe_sections + constants.RESET)
+		
+		maxScore += int(indicators['2246'].severity) # Same as 1246
+		if not int(mins.find('ExecutableSections').text) <= exe_sections <= int(maxs.find('ExecutableSections').text):
+			score += int(indicators['2246'].severity)
+			str = constants.RED + "The executable has %d executable sections" % exe_sections + constants.RESET
+			table.add_row([str, indicators['2246'].severity])
 		else:
 			print(constants.GREEN + "\tThe executable has %d executable sections" % exe_sections + constants.RESET)
 	
 		# executable and writable sections
+		maxScore += int(indicators['2215'].severity)
 		for section in self.peFile.sections:
 			if section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE) and section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_WRITE):
-				print(constants.RED + "\tThe executable has section(s) that are both executable and writable" + constants.RESET)
+				score += int(indicators['2215'].severity)
+				str = constants.RED + "The executable has section(s) that are both executable and writable" + constants.RESET
+				table.add_row([str, indicators['2215'].severity])
 		
 		# common passwords
 		if self.strings is None:
@@ -238,49 +325,82 @@ class PeAnalyzer:
 		# TODO: Maybe use regex instead of checking if the string is in the list of strings?
 		for r in stringsXml.find('psw').findall('item'):
 			if r.text in self.strings:
-				password_checks +=1
-		if not (int(mins.find('Passwords').text) <= password_checks < int(maxs.find('Passwords').text)):
-			print(constants.RED + "\tThe executable contains %d default passwords." % password_checks + constants.RESET)
+				password_checks += 1
+		maxScore += int(indicators['1637'].severity)
+		if not (int(mins.find('Passwords').text) <= password_checks <= int(maxs.find('Passwords').text)):
+			score += int(indicators['1637'].severity)
+			str = constants.RED + "The executable contains %d default passwords." % password_checks + constants.RESET
+			table.add_row([str, indicators['1637'].severity])
 		else:
 			print(constants.GREEN + "\tThe executable contains %d default passwords." % password_checks + constants.RESET)
-			
+		
+		# Compiled with Delphi
+		maxScore += int(indicators['1121'].severity)
+		if "Delphi" in self.strings:
+			score += int(indicators['1121'].severity)
+			str = constants.RED + "The file has been compiled with Delphi" + constants.RESET
+			table.add_row([str, indicators['1121'].severity])
+		
 		# Size of code greater than size of code section
 		code_sec_size = 0
 		for section in self.peFile.sections:
-			if section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.CNT_CODE): # Before: section.name == ".text"
+			if section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.CNT_CODE):
 				code_sec_size += section.size
+		
+		maxScore += int(indicators['1623'].severity)
 		if self.peFile.optional_header.sizeof_code > code_sec_size:
-			print(constants.RED + "\tThe size of code (%i bytes) is bigger than the size (%i bytes) of code sections" % (self.peFile.optional_header.sizeof_code, code_sec_size) + constants.RESET)
+			score += int(indicators['1623'].severity)
+			str = constants.RED + "The size of code (%i bytes) is bigger than the size (%i bytes) of code sections" % (self.peFile.optional_header.sizeof_code, code_sec_size) + constants.RESET
+			table.add_row([str, indicators['1623'].severity])
 		else:
 			print(constants.GREEN + "\tThe size of code (%i bytes) matches the size of code sections" % self.peFile.optional_header.sizeof_code + constants.RESET)
 		
 		# Suspicious section names
 		standardSectionNames = [".text", ".bss", ".rdata", ".data", ".idata", ".reloc"]
-		suspiciousSections = False
+		suspiciousSections = 0
 		for section in self.peFile.sections:
 			if not section.name in standardSectionNames:
 				print(constants.RED + "\tSuspicious section name %s" % (section.name) + constants.RESET)
-				suspiciousSections = True
-		if not suspiciousSections:
-			print(constants.GREEN + "\tNo suspicious section names found" + constants.RESET)
+				suspiciousSections += 1
+		
+		min = int(mins.find('BlackListedSectionNames').text)
+		max = int(maxs.find('BlackListedSectionNames').text)
+		maxScore += int(indicators['2248'].severity)
+		if not min <= suspiciousSections < max:
+			score += int(indicators['2248'].severity)
+			str = constants.RED + "The file has (%i) blacklisted section name(s)" % suspiciousSections + constants.RESET
+			table.add_row([str, indicators['2248'].severity])
 		
 		# Missing DOS-Stub
+		maxScore += int(indicators['1260'].severity)
 		if len(self.peFile.dos_stub) == 0:
-			print(constants.RED + "The dos-stub is missing" + constants.RESET)
+			score += int(indicators['1260'].severity)
+			str = constants.RED + "The dos-stub is missing" + constants.RESET
+			table.add_row([str, indicators['1260'].severity])
 		
 		# Number of anti-debugging functions
 		min = int(mins.find('AntidebugFunctions').text)
 		max = int(maxs.find('AntidebugFunctions').text)
 		antiDbgFunctions = len(self.getAntiDebugFcts())
+		maxScore += int(indicators['2270'].severity) # Same as 1270
 		if not min <= antiDbgFunctions <= max:
-			print(constants.RED + "\tThe file imports (%d) antidebug function(s)" % antiDbgFunctions + constants.RESET)
-	
+			score += int(indicators['2270'].severity)
+			str = constants.RED + "The file imports (%d) antidebug function(s)" % antiDbgFunctions + constants.RESET
+			table.add_row([str, indicators['2270'].severity])
+		
 		# Keyboard functions
 		keyboardFcts, keys = self.getKeyboardFcts()
+		maxScore += int(indicators['1635'].severity)
 		if len(keyboardFcts) > 0:
-			print(constants.RED + "\tThe file references (%i) keyboard functions" % len(keyboardFcts) + constants.RESET)
+			score += int(indicators['1635'].severity)
+			str = constants.RED + "The file references (%i) keyboard functions" % len(keyboardFcts) + constants.RESET
+			table.add_row([str, indicators['1635'].severity])
 		if keys > 0:
-			print(constants.RED + "\tThe file references (%i) keyboard keys like a Keylogger" % keys + constants.RESET)
+			score += int(indicators['1635'].severity)
+			str = constants.RED + "The file references (%i) keyboard keys like a Keylogger" % keys + constants.RESET
+			table.add_row([str, indicators['1635'].severity])
+		
+		return score, maxScore
 	
 	def getKeyboardFcts(self):
 		if self.imports is None:
@@ -330,12 +450,21 @@ class PeAnalyzer:
 		antiDbgFunctions += f
 		return antiDbgFunctions
 
-	def checkFeatures(self):
+	def checkFeatures(self, indicators, score, maxScore, table):
 		if self.imports is None:
 			self.__getImports()
+		
+		maxScore += int(indicators['1265'].severity)
+		if not self.checkImportNumber():
+			score += int(indicators['1265'].severity)
+			str = constants.RED + "The count (%d) of imports is suspicious" % len(self.imports) + constants.RESET
+			table.add_row([str, indicators['1265'].severity])
+		
+		
 		featureSet = set()
 		# TODO: we can also print it as table with the severity (and sum up the severity over all things)
 		for feature in ET.parse("xml/features.xml").getroot().find('features').findall('features'):
+			maxScore += int(indicators[feature.attrib["id"]])
 			for lib in feature.find('libs').findall('lib'):
 				for fct in lib.find('fcts').findall('fct'):
 					if lib.attrib["name"] == "" and fct.text == "":
@@ -345,9 +474,13 @@ class PeAnalyzer:
 						id = fct.attrib["id"]
 						featureSet.add(id)
 		
-		for indicator in ET.parse("xml/indicators.xml").getroot().find('indicators').findall('indicator'):
-			if indicator.attrib['id'] in featureSet and indicator.attrib['enable'] == "1":
-				print(constants.RED + "\t" + indicator.text + constants.RESET)
+		for k, indicator in indicators.items():
+			if k in featureSet and indicator.enable == "1":
+				score += int(indicator.severity)
+				str = constants.RED + indicator.text + constants.RESET
+				table.add_row([str, indicator.severity])
+		
+		return score, maxScore
 	
 	def __getImports(self):
 		self.imports = []
@@ -383,7 +516,7 @@ class PeAnalyzer:
 		root = ET.parse("xml/functions.xml").getroot()
 		for hash in root.find('imphashes').findall('imphash'):
 			if imphash == hash.text.lower():
-				print(constants.RED + "Found matching imphash (%s) for the file" % imphash + constants.RESET)
+				print(constants.RED + "\tFound matching imphash (%s) for the file" % imphash + constants.RESET)
 
 	def blacklistedImports(self):
 		'''
