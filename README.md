@@ -21,3 +21,4 @@ We support multiple output formats and make the output result highly configurabl
 ### Dependencies
 * prettytable python library: `pip3 install prettytable`
 * LIEF to parse the PE file `pip3 install setuptools --upgrade; pip3 install lief`
+* In case files should be submitted to VirusTotal in order to retrieve their score, a [VirusTotal API key](https://www.virustotal.com/en/documentation/public-api/#getting-started) has to be stored in the file `VirusTotalApiKey` in the root of the directory.
