@@ -13,13 +13,21 @@ logger = logging.getLogger("VirusTotalClient")
 logger.setLevel(50)
 
 class VirusTotalClient:
-
+	
+	report = None
+	
 	def __init__(self, file):
 		self.file = file
+		if not os.path.isfile('VirusTotalApiKey'):
+			self.key = None
+			return
+		
 		with open('VirusTotalApiKey', 'r') as keyFile:
 			self.key = keyFile.read().strip()
 
 	def sendRequest(self):
+		if self.key is None:
+			return None
 		params = {'apikey': self.key}
 		files = {'file': (self.file, open(self.file, 'rb'))}
 		response = requests.post('https://www.virustotal.com/vtapi/v2/file/scan', files=files, params=params)
@@ -34,6 +42,8 @@ class VirusTotalClient:
 			return None
 
 	def getReport(self, resourceId = None):
+		if self.key is None:
+			return None
 		if resourceId is None:
 			resourceId = self.sendRequest()
 		if resourceId is None:
@@ -94,6 +104,11 @@ class VirusTotalClient:
 		return root
 	
 	def getJsonReport(self, jsonDict):
+		self.getReport()
+		if self.report is None:
+			jsonDict["VirusTotal"] = "Error while getting the result of Virus Total"
+			return jsonDict
+			
 		result = {"summary": {"positives": str(self.report['positives']), "total": str(self.report['total'])}}
 		result["details"] = []
 		for test, result in self.report["scans"].items():
