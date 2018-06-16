@@ -12,6 +12,7 @@ import json
 import readline, glob # to path auto complete
 import pydoc
 import datetime
+import os
 
 class Indicator:
 	def __init__(self, enable, severity, id, text):
@@ -159,13 +160,22 @@ def interactiveMode(file = None):
 	
 	
 	def complete(text, state):
+		text = text.replace("~", os.path.expanduser("~"))
 		return (glob.glob(text+'*')+[None])[state]
     	
 	readline.set_completer_delims(' \t\n;')
 	readline.parse_and_bind("tab: complete")
 	readline.set_completer(complete)
 	
-	user_in = input(">> ")
+	no_user_in = True
+	while no_user_in:
+		try:
+			user_in = input(">> ")
+			no_user_in = False
+		except EOFError:
+			print("Please confirm with enter, don't use ctrl-D")
+			no_user_in = True
+	
 	while user_in != "q" and user_in != "quit":
 		if user_in.startswith("file ") or user_in.startswith("f "):
 			# File is specified
@@ -173,11 +183,14 @@ def interactiveMode(file = None):
 			if len(args) > 2:
 				print("Please use the command only with one argument: file|f <filename>")
 			else:
-				# TODO: Check if file exists.
 				file = args[1]
-				peAnalyzer = PeAnalyzer(file)
-				matcher = SignatureMatcher(file)
-				vt = VirusTotalClient(file)
+				file = file.replace("~", os.path.expanduser("~"))
+				if not os.path.isfile(file):
+					print(constants.BLUE + "Could not find the specified file %s" % file + constants.RESET)
+				else:
+					peAnalyzer = PeAnalyzer(file)
+					matcher = SignatureMatcher(file)
+					vt = VirusTotalClient(file)
 		elif user_in != "help" and peAnalyzer is None:
 			print("Select a file first")
 		elif user_in == "header" or user_in == "h":
@@ -234,13 +247,32 @@ def interactiveMode(file = None):
 			print("\tstrings -a - show all strings we can find in the PE file")
 			print("\tstrings -b - show blacklisted strings we can find in the PE file")
 			print("\thelp - print this help text")
-		user_in = input(">> ")
+		
+		no_user_in = True
+		while no_user_in:
+			try:
+				user_in = input(">> ")
+				no_user_in = False
+			except EOFError:
+				print("Please confirm with enter, don't use ctrl-D")
+				no_user_in = True
 
 def checkFile(args):
 	if args.xml:
 		root = ET.Element("Report")
 	elif args.json:
 		jsonDict = {}
+
+	if not os.path.isfile(args.file):
+		if args.xml:
+			root.text = "Could not find the specified file " + args.file
+			print(ET.tostring(root).decode('utf-8'))
+		elif args.json:
+			jsonDict["Error"] = "Could not find the specified file " + args.file
+			print(json.dumps(jsonDict))
+		else:
+			print(constants.BLUE + "Could not find the specified file %s" % args.file + constants.RESET)
+		return
 
 	if args.virusTotal:
 		vt = VirusTotalClient(args.file)
