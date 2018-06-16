@@ -65,8 +65,8 @@ def collectIndicators(vt, peAnalyzer, matcher, all = False):
 		mins = rootThresholds.find('thresholds').find('minimums')
 		maxs = rootThresholds.find('thresholds').find('maximums')
 		vt.getReport()
-		min = int(mins.find('AntidebugFunctions').text)
-		max = int(maxs.find('AntidebugFunctions').text)
+		min = int(mins.find('VirustotalEnginesPositiv').text)
+		max = int(maxs.find('VirustotalEnginesPositiv').text)
 		maxScore += int(indicators['1120'].severity)
 		if min <= vt.report['positives'] <= max:
 			vtRes = constants.GREEN + "\t"

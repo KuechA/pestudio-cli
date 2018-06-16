@@ -152,7 +152,7 @@ class PeAnalyzer:
 			str = constants.RED + "Entrypoint (%s) is outside the file." % (hex(self.peFile.entrypoint)) + constants.RESET
 			table.add_row([str, indicators['1037'].severity])
 		elif all:
-			print(constants.GREEN + "\tEntrypoint (%s) correctly located." % (hex(self.peFile.entrypoint)) + constants.RESET)
+			print(constants.GREEN + "\tEntrypoint (%s) located inside the file." % (hex(self.peFile.entrypoint)) + constants.RESET)
 
 		maxScore += int(indicators['1211'].severity)
 		if self.peFile.entrypoint == 0:
@@ -160,13 +160,14 @@ class PeAnalyzer:
 			str = constants.RED + "The address of the entry-point is zero" + constants.RESET
 			table.add_row([str, indicators['1211'].severity])
 		elif all:
-			print(constants.GREEN + "\tThe address of the entry-point is valid" + constants.RESET)
+			print(constants.GREEN + "\tThe address of the entry-point is not zero" + constants.RESET)
 			
 		
 		# TODO: Invalid file checksum, checksum computed different to checksum
 
 		
 		# File ratio of resources
+		maxScore += int(indicators['1232'].severity)
 		if self.peFile.has_resources:
 			rsrc_directory = self.peFile.data_directory(lief.PE.DATA_DIRECTORY.RESOURCE_TABLE)
 			if rsrc_directory.has_section:
@@ -180,7 +181,10 @@ class PeAnalyzer:
 					table.add_row([str, indicators['1220'].severity])
 				elif all:
 					print(constants.GREEN + "\tThe file-ratio (%d) of the resources seems reasonable" % (percentage) + constants.RESET)
-			
+		else:
+			score += int(indicators['1232'].severity)
+			str = constants.RED + "The file is resource-less" + constants.RESET
+			table.add_row([str, indicators['1232'].severity])
 
 		# PE file uses control flow guard
 		maxScore += int(indicators['1050'].severity)
