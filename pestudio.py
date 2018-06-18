@@ -28,6 +28,7 @@ def parseCommandLineArguments():
 	parser.add_argument("--header", help="Show information from header.", action="store_true", dest="header")
 	parser.add_argument("-t", "--tlsCallbacks", help="Show addresses of TLS callbacks.", action="store_true", dest="tls")
 	parser.add_argument("-i", "--imports", help="Check the imports against known malicious functions.", action="store_true", dest="imports")
+	parser.add_argument("--indicators", help="Check the indicators of the file.", action="store_true", dest="indicators")
 	parser.add_argument("-e", "--exports", help="Show the exports of the binary", action="store_true", dest="exports")
 	parser.add_argument("-r", "--resources", help="Check the resources for blacklisted values.", action="store_true", dest="resources")
 	parser.add_argument("--relocations", help="Show the relocations.", action="store_true", dest="relocations")
@@ -46,8 +47,9 @@ def parseIndicators():
 	
 	return indicators
 
-def collectIndicators(vt, peAnalyzer, matcher, all = False):
-	print("Indicators:")
+def collectIndicators(vt, peAnalyzer, matcher, all = False, root = None, jsonDict = None):
+	if root is None and jsonDict is None:
+		print("Indicators:")
 	
 	indicators = parseIndicators()
 	
@@ -69,86 +71,112 @@ def collectIndicators(vt, peAnalyzer, matcher, all = False):
 		min = int(mins.find('VirustotalEnginesPositiv').text)
 		max = int(maxs.find('VirustotalEnginesPositiv').text)
 		maxScore += int(indicators['1120'].severity)
-		if min <= vt.report['positives'] <= max:
+		if min <= vt.report['positives'] <= max and jsonDict is None and root is None:
 			vtRes = constants.GREEN + "\t"
-		else:
+		elif jsonDict is None and root is None:
 			vtRes = constants.RED
 			score += int(indicators['1120'].severity)
 		vtRes += "VirusTotal result: " + str(vt.report['positives']) + " of " + str(vt.report['total']) + " tests are positive" + constants.RESET
 		if min <= vt.report['positives'] <= max:
 			print(vtRes)
 		else:
-			table.add_row([vtRes, indicators['1120'].severity])
+			if jsonDict is None and root is None:
+				table.add_row([vtRes, indicators['1120'].severity])
 	except:
-		print(constants.BLUE + "\tNo connection to VirusTotal possible" + constants.RESET)
+		if jsonDict is None and root is None:
+			print(constants.BLUE + "\tNo connection to VirusTotal possible" + constants.RESET)
 
-	score, maxScore = peAnalyzer.printIndicators(indicators, score, maxScore, table, all)
-	score, maxScore = peAnalyzer.checkFeatures(indicators, score, maxScore, table)
+	if not jsonDict is None:
+		score, maxScore, jsonDict, root = peAnalyzer.printIndicators(indicators, score, maxScore, table, all=all, jsonDict=jsonDict)
+	elif not root is None:
+		score, maxScore, jsonDict, root = peAnalyzer.printIndicators(indicators, score, maxScore, table, all=all, root=root)
+	else:
+		score, maxScore, jsonDict, root = peAnalyzer.printIndicators(indicators, score, maxScore, table, all=all)
 	
-	# Suspicious header information
-	timeDateStamp = datetime.datetime.fromtimestamp(peAnalyzer.peFile.header.time_date_stamps)
-	if timeDateStamp > datetime.datetime.now():
-		print("%s\tFile Header: Suspicious value for TimeDateStamp (%s)%s" % (constants.RED, str(timeDateStamp), constants.RESET))
-	elif all:
-		print(constants.GREEN + "\tFile Header seems to be valid" + constants.RESET)
+	if not jsonDict is None:
+		score, maxScore, jsonDict, root = peAnalyzer.checkFeatures(indicators, score, maxScore, table, jsonDict=jsonDict)
+	elif not root is None:
+		score, maxScore, jsonDict, root = peAnalyzer.checkFeatures(indicators, score, maxScore, table, root=root)
+	else:
+		score, maxScore, jsonDict, root = peAnalyzer.checkFeatures(indicators, score, maxScore, table)
 	
-	# Blacklisted imports and suspicious number of imports
-	if not peAnalyzer.checkImportNumber():
-		print(constants.GREEN + "\tNumber of imports is in a reasonable range (%d)" % len(peAnalyzer.imports), constants.RESET)
-	elif all:
-		print(constants.RED + "\tSuspicious number of imports (%d)" % len(peAnalyzer.imports) + constants.RESET)
 	
-	suspicious, totalImp = peAnalyzer.blacklistedImports()
-	if len(suspicious):
-		print(constants.RED + "\t%d out of %d imports are blacklisted" % (len(suspicious), len(peAnalyzer.imports)) + constants.RESET)
-	elif all:
-		print(constants.GREEN + "\tNo blacklisted imports found" + constants.RESET)
+	if jsonDict is None and root is None: # print summary only for user interface mode
+		# Suspicious header information
+		timeDateStamp = datetime.datetime.fromtimestamp(peAnalyzer.peFile.header.time_date_stamps)
+		if timeDateStamp > datetime.datetime.now():
+			print("%s\tFile Header: Suspicious value for TimeDateStamp (%s)%s" % (constants.RED, str(timeDateStamp), constants.RESET))
+		elif all:
+			print(constants.GREEN + "\tFile Header seems to be valid" + constants.RESET)
+		
+		# Blacklisted imports and suspicious number of imports
+		if not peAnalyzer.checkImportNumber():
+			print(constants.GREEN + "\tNumber of imports is in a reasonable range (%d)" % len(peAnalyzer.imports), constants.RESET)
+		elif all:
+			print(constants.RED + "\tSuspicious number of imports (%d)" % len(peAnalyzer.imports) + constants.RESET)
+		
+		suspicious, totalImp = peAnalyzer.blacklistedImports()
+		if len(suspicious):
+			print(constants.RED + "\t%d out of %d imports are blacklisted" % (len(suspicious), len(peAnalyzer.imports)) + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tNo blacklisted imports found" + constants.RESET)
+		
+		# Blacklisted resources
+		resources = peAnalyzer.blacklistedResources()
+		if len(resources):
+			print(constants.RED + "\t%d blacklisted resources found" % (len(resources)) + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tNo blacklisted resources found" + constants.RESET)
+		
+		# tls callbacks
+		if peAnalyzer.peFile.has_tls:
+			print(constants.RED + "\tThe PE file uses TLS callbacks." + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tNo TLS callbacks used PE file" + constants.RESET)
+		
+		# relocations
+		if peAnalyzer.peFile.has_relocations:
+			print(constants.RED + "\tThe binary uses relocations" + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tThe binary uses no relocations" + constants.RESET)
+		
+		# Blacklisted strings
+		blacklisted, insults, keys = peAnalyzer.getBlacklistedStrings(False)
+		if insults > 0:
+			print(constants.RED + "\t%d insults found in the file" % (insults) + constants.RESET)
+		elif all:
+				print(constants.GREEN + "\tNo insults found in the file" + constants.RESET)
+		
+		if keys > 0:
+			print(constants.RED + "\t%d keyboard keys are used by the file" % (keys) + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tNo keyboard keys are used in the file" + constants.RESET)
+		
+		if blacklisted > 0:
+			print(constants.RED + "\t%d strings are blacklisted" % (blacklisted) + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tNo blacklisted strings found" + constants.RESET)
+		
+		# Packer signatures
+		packers = matcher.findPackers()
+		if len(packers):
+			print(constants.RED + "\tThe signature of the following packer was found: " + str(packers) + constants.RESET)
+		elif all:
+			print(constants.GREEN + "\tNo packer signature was found in the PE file" + constants.RESET)
 	
-	# Blacklisted resources
-	resources = peAnalyzer.blacklistedResources()
-	if len(resources):
-		print(constants.RED + "\t%d blacklisted resources found" % (len(resources)) + constants.RESET)
-	elif all:
-		print(constants.GREEN + "\tNo blacklisted resources found" + constants.RESET)
+	## end if: summary only for user interface mode
 	
-	# tls callbacks
-	if peAnalyzer.peFile.has_tls:
-		print(constants.RED + "\tThe PE file uses TLS callbacks." + constants.RESET)
-	elif all:
-		print(constants.GREEN + "\tNo TLS callbacks used PE file" + constants.RESET)
-	
-	# relocations
-	if peAnalyzer.peFile.has_relocations:
-		print(constants.RED + "\tThe binary uses relocations" + constants.RESET)
-	elif all:
-		print(constants.GREEN + "\tThe binary uses no relocations" + constants.RESET)
-	
-	# Blacklisted strings
-	blacklisted, insults, keys = peAnalyzer.getBlacklistedStrings(False)
-	if insults > 0:
-		print(constants.RED + "\t%d insults found in the file" % (insults) + constants.RESET)
-	elif all:
-		print(constants.GREEN + "\tNo insults found in the file" + constants.RESET)
-	
-	if keys > 0:
-		print(constants.RED + "\t%d keyboard keys are used by the file" % (keys) + constants.RESET)
-	elif all:
-		print(constants.GREEN + "\tNo keyboard keys are used in the file" + constants.RESET)
-	
-	if blacklisted > 0:
-		print(constants.RED + "\t%d strings are blacklisted" % (blacklisted) + constants.RESET)
-	elif all:
-		print(constants.GREEN + "\tNo blacklisted strings found" + constants.RESET)
-	
-	# Packer signatures
-	packers = matcher.findPackers()
-	if len(packers):
-		print(constants.RED + "\tThe signature of the following packer was found: " + str(packers) + constants.RESET)
-	elif all:
-		print(constants.GREEN + "\tNo packer signature was found in the PE file" + constants.RESET)
-	
-	table.field_names = ["Description", "Severity(" + str(score) + "/" + str(maxScore) + ")"]
-	print(table)
+	if not jsonDict is None:
+		jsonDict["indicators"]["summary"] = {"Severity": str(score), "MaxSeverity": str(maxScore)}
+	elif not root is None:
+		indicatorsXml = root.find("indicators")
+		indicatorsScore = ET.SubElement(indicatorsXml, "Summary")
+		ET.SubElement(indicatorsScore, "MaxSeverity").text = str(maxScore)
+		ET.SubElement(indicatorsScore, "Severity").text = str(score)
+	else:
+		table.field_names = ["Description", "Severity(" + str(score) + "/" + str(maxScore) + ")"]
+		print(table)
+	return jsonDict, root
 
 def interactiveMode(file = None):
 	peAnalyzer = None
@@ -274,8 +302,10 @@ def checkFile(args):
 			print(constants.BLUE + "Could not find the specified file %s" % args.file + constants.RESET)
 		return
 
+	vt = VirusTotalClient(args.file)
+	peAnalyzer = PeAnalyzer(args.file)
+	matcher = SignatureMatcher(args.file)
 	if args.virusTotal:
-		vt = VirusTotalClient(args.file)
 		if args.xml:
 			root = vt.getXmlReport(root)
 		elif args.json:
@@ -283,7 +313,13 @@ def checkFile(args):
 		else:
 			print(vt.printReport())
 	
-	peAnalyzer = PeAnalyzer(args.file)
+	if args.indicators:
+		if args.xml:
+			jsonDict, root = collectIndicators(vt, peAnalyzer, matcher, root=root)
+		elif args.json:
+			jsonDict, root = collectIndicators(vt, peAnalyzer, matcher, jsonDict=jsonDict)
+		else:
+			collectIndicators(vt, peAnalyzer, matcher)
 	
 	if args.header:
 		if args.xml:
@@ -349,7 +385,6 @@ def checkFile(args):
 			peAnalyzer.getBlacklistedStrings()
 	
 	if args.signatures:
-		matcher = SignatureMatcher(args.file)
 		packers = matcher.findPackers()
 		
 		if args.xml:

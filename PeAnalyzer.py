@@ -41,24 +41,36 @@ class PeAnalyzer:
 			self.peFile = None
 		self.strings = None
 	
-	def printIndicators(self, indicators, score, maxScore, table, all = False):
+	def printIndicators(self, indicators, score, maxScore, table, all = False, jsonDict = None, root = None):
+		jsonResults = []
+		if not root is None:
+			indicatorsXml = ET.SubElement(root, "indicators")
+			indicatorsXml = root.find("indicators")
+		
 		# check file name
 		if self.peFile.name != self.file.split("/")[-1]: # TODO: Check if that's correct
 			print("\tName: " + self.peFile.name + " differs from file name " + self.file.split("/")[-1])
 	
 		# Suspicious sizes: File, Optional header, file header, certificate
 		# TODO: Read severity from indicators.xml?
-		root = ET.parse("xml/thresholds.xml").getroot()
-		mins = root.find('thresholds').find('minimums')
-		maxs = root.find('thresholds').find('maximums')
+		thresholdRoot = ET.parse("xml/thresholds.xml").getroot()
+		mins = thresholdRoot.find('thresholds').find('minimums')
+		maxs = thresholdRoot.find('thresholds').find('maximums')
 		
 		min = int(mins.find('Image').text)
 		max = int(maxs.find('Image').text)
 		maxScore += int(indicators['1207'].severity)
 		if not (min <= self.peFile.optional_header.sizeof_image <= max):
 			score += int(indicators['1207'].severity)
-			str = constants.RED + "The value of 'SizeOfImage' (%d) is suspicious" % (self.peFile.optional_header.sizeof_image) + constants.RESET
-			table.add_row([str, indicators['1207'].severity])
+			str = "The value of 'SizeOfImage' (%d) is suspicious" % (self.peFile.optional_header.sizeof_image)
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1207'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1207'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1207'].severity])
 		elif all:
 			print(constants.GREEN + "\tSize of image is reasonable (%d bytes)" % self.peFile.optional_header.sizeof_image + constants.RESET)
 			
@@ -75,23 +87,37 @@ class PeAnalyzer:
 		maxScore += int(indicators['1004'].severity)
 		if not (min <= self.peFile.header.sizeof_optional_header <= max): # Not sure if that's correct
 			score += int(indicators['1004'].severity)
-			str = constants.RED + "The size (%d bytes) of the optional-header is suspicious" % (self.peFile.header.sizeof_optional_header) + constants.RESET
-			table.add_row([str, indicators['1004'].severity])
+			str = "The size (%d bytes) of the optional-header is suspicious" % (self.peFile.header.sizeof_optional_header)
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1004'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1004'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1004'].severity])
 		elif all:
 			print(constants.GREEN + "\tSize of Optional Header is reasonable (%d bytes)" % self.peFile.header.sizeof_optional_header + constants.RESET)
 		
 		# Content of certificate??, expired issuer, expired subject, no digital certificate
-		if not self.peFile.has_signature:
+		if not self.peFile.has_signature and jsonDict is None and root is None:
 			print(constants.RED + "\tThe PE file has no digital signature" + constants.RESET)
-		else:
+		elif self.peFile.has_signature:
 			maxScore += int(indicators['1039'].severity)
 			for cert in self.peFile.signature.certificates:
 				cert_from = datetime.datetime.fromtimestamp(cert.valid_from)
 				cert_to = datetime.datetime.fromtimestamp(cert.valid_to)
 				if cert_from > datetime.datetime.now() or cert_to < datetime.datetime.now():
 					score += int(indicators['1039'].severity)
-					str = constants.RED + "Digital certificate is used which is not valid (from: %s to: %s)" + (str(cert_from), str(cert_to)) + constants.RESET
-					table.add_row([str, indicators['1039'].severity])
+					str = "Digital certificate is used which is not valid (from: %s to: %s)" + (str(cert_from), str(cert_to))
+					if not jsonDict is None:
+			 			jsonResults.append({"indicator": str, "severity" : indicators['1039'].severity})
+					elif not root is None:
+						indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+						indicatorXml.set("severity", indicators['1039'].severity)
+						indicatorXml.text = str
+					else:
+						table.add_row([constants.RED + str + constants.RESET, indicators['1039'].severity])
 			# TODO: We should check if the signature is valid but this seems to be ugly
 		
 		# Self-extractable file??
@@ -103,8 +129,15 @@ class PeAnalyzer:
 		maxScore += int(indicators['1027'].severity)
 		if min > self.peFile.optional_header.sizeof_code:
 			score += int(indicators['1027'].severity)
-			str = constants.RED + "The file is code-less" + constants.RESET
-			table.add_row([str, indicators['1027'].severity])
+			str = "The file is code-less"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1027'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1027'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1027'].severity])
 		elif all:
 			print(constants.GREEN + "\tThe file has valid code size" + constants.RESET)
 		
@@ -112,8 +145,15 @@ class PeAnalyzer:
 		maxScore += int(indicators['1043'].severity)
 		if self.peFile.has_resources and not self.peFile.resources_manager.has_manifest:
 			score += int(indicators['1043'].severity)
-			str = constants.RED + "The file has no Manifest" + constants.RESET
-			table.add_row([str, indicators['1043'].severity])
+			str = "The file has no Manifest"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1043'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1043'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1043'].severity])
 		elif all:
 			print(constants.GREEN + "\tThe file has a Manifest" + constants.RESET)
 		
@@ -131,8 +171,15 @@ class PeAnalyzer:
 				if not section.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE):
 					# Section is not marked as executable
 					score += int(indicators['1035'].severity)
-					str = constants.RED + "Entrypoint (%s) in section %s which is not executable" % (hex(self.peFile.entrypoint), section.name) + constants.RESET
-					table.add_row([str, indicators['1035'].severity])
+					str = "Entrypoint (%s) in section %s which is not executable" % (hex(self.peFile.entrypoint), section.name)
+					if not jsonDict is None:
+			 			jsonResults.append({"indicator": str, "severity" : indicators['1035'].severity})
+					elif not root is None:
+						indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+						indicatorXml.set("severity", indicators['1035'].severity)
+						indicatorXml.text = str
+					else:
+						table.add_row([constants.RED + str + constants.RESET, indicators['1035'].severity])
 					not_exe_entry_point += 1
 		
 		if all and not_exe_entry_point == 0:
@@ -142,23 +189,44 @@ class PeAnalyzer:
 		if lastSection:
 			# The section of the entry point was the last section in the PE file
 			score += int(indicators['1605'].severity)
-			str = constants.RED + "Entrypoint is in last section" + constants.RESET
-			table.add_row([str, indicators['1605'].severity])
+			str = "Entrypoint is in last section"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1605'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1605'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1605'].severity])
 		
 		maxScore += int(indicators['1037'].severity)
 		if self.peFile.optional_header.imagebase > self.peFile.entrypoint > self.peFile.optional_header.imagebase + self.peFile.optional_header.sizeof_image:
 			# Entry point outside file
 			score  += int(indicators['1037'].severity)
-			str = constants.RED + "Entrypoint (%s) is outside the file." % (hex(self.peFile.entrypoint)) + constants.RESET
-			table.add_row([str, indicators['1037'].severity])
+			str = "Entrypoint (%s) is outside the file." % (hex(self.peFile.entrypoint))
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1037'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1037'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1037'].severity])
 		elif all:
 			print(constants.GREEN + "\tEntrypoint (%s) located inside the file." % (hex(self.peFile.entrypoint)) + constants.RESET)
 
 		maxScore += int(indicators['1211'].severity)
 		if self.peFile.entrypoint == 0:
 			score  += int(indicators['1211'].severity)
-			str = constants.RED + "The address of the entry-point is zero" + constants.RESET
-			table.add_row([str, indicators['1211'].severity])
+			str = "The address of the entry-point is zero"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1211'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1211'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1211'].severity])
 		elif all:
 			print(constants.GREEN + "\tThe address of the entry-point is not zero" + constants.RESET)
 			
@@ -177,21 +245,42 @@ class PeAnalyzer:
 				percentage = (rsrc_directory.section.size / self.peFile.optional_header.sizeof_image ) * 100
 				if not (min <= percentage <= max):
 					score += int(indicators['1220'].severity)
-					str = constants.RED + "The file-ratio (%d) of the resources is suspicious" % (percentage) + constants.RESET
-					table.add_row([str, indicators['1220'].severity])
+					str = "The file-ratio (%d) of the resources is suspicious" % (percentage)
+					if not jsonDict is None:
+						jsonResults.append({"indicator": str, "severity" : indicators['1220'].severity})
+					elif not root is None:
+						indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+						indicatorXml.set("severity", indicators['1220'].severity)
+						indicatorXml.text = str
+					else:
+						table.add_row([constants.RED + str + constants.RESET, indicators['1220'].severity])
 				elif all:
 					print(constants.GREEN + "\tThe file-ratio (%d) of the resources seems reasonable" % (percentage) + constants.RESET)
 		else:
 			score += int(indicators['1232'].severity)
-			str = constants.RED + "The file is resource-less" + constants.RESET
-			table.add_row([str, indicators['1232'].severity])
+			str = "The file is resource-less"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1232'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1232'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1232'].severity])
 
 		# PE file uses control flow guard
 		maxScore += int(indicators['1050'].severity)
 		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.GUARD_CF):
 			score += int(indicators['1211'].severity)
-			str = constants.RED + "The file implements Control Flow Guard (CFG)" + constants.RESET
-			table.add_row([str, indicators['1050'].severity])
+			str = "The file implements Control Flow Guard (CFG)"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1050'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1050'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1050'].severity])
 		elif all:
 			print(constants.GREEN + "\tThe file does not implement Control Flow Guard (CFG)" + constants.RESET)
 					
@@ -200,8 +289,15 @@ class PeAnalyzer:
 		maxScore += int(indicators['1056'].severity)
 		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.WDM_DRIVER):
 			score += int(indicators['1056'].severity)
-			str = constants.RED + "The file is a Device Driver" + constants.RESET
-			table.add_row([str, indicators['1056'].severity])
+			str = "The file is a Device Driver"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1056'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1056'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1056'].severity])
 		elif all:
 			print(constants.GREEN + "\tThe file is not a Device Driver" + constants.RESET)
 
@@ -210,31 +306,66 @@ class PeAnalyzer:
 		maxScore += int(indicators['1101'].severity)
 		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.NX_COMPAT):
 			score += int(indicators['1100'].severity)
-			str = constants.RED + "The file opts for Data Execution Prevention (DEP)" + constants.RESET
-			table.add_row([str, indicators['1100'].severity])
+			str = "The file opts for Data Execution Prevention (DEP)"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1100'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1100'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1100'].severity])
 		else:
 			score += int(indicators['1101'].severity)
-			str = constants.RED + "The file ignores Data Execution Prevention (DEP)" + constants.RESET
-			table.add_row([str, indicators['1101'].severity])
+			str = "The file ignores Data Execution Prevention (DEP)"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1101'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1101'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1101'].severity])
 		
 		# PE file makes use of ASLR
 		maxScore += int(indicators['1102'].severity)
 		maxScore += int(indicators['1103'].severity)
 		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.DYNAMIC_BASE):
 			score += int(indicators['1102'].severity)
-			str = constants.RED + "The file opts for Address Space Layout Randomization (ASLR)" + constants.RESET
-			table.add_row([str, indicators['1102'].severity])
+			str = "The file opts for Address Space Layout Randomization (ASLR)"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1102'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1102'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1102'].severity])
 		else:
 			score += int(indicators['1103'].severity)
-			str = constants.RED + "The file ignores Address Space Layout Randomization (ASLR)" + constants.RESET
-			table.add_row([str, indicators['1103'].severity])
+			str = "The file ignores Address Space Layout Randomization (ASLR)"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1103'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1103'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1103'].severity])
 		
 		# PE file does not use of structured error handling (SEH)
 		maxScore += int(indicators['1105'].severity)
 		if self.peFile.optional_header.has(lief.PE.DLL_CHARACTERISTICS.NO_SEH):
 			score += int(indicators['1105'].severity)
-			str = constants.RED + "The file ignores Structured Exception Handling (SEH)" + constants.RESET
-			table.add_row([str, indicators['1105'].severity])
+			str = "The file ignores Structured Exception Handling (SEH)"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1105'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1105'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1105'].severity])
 		
 		# PE file does not use GS
 		maxScore += int(indicators['1106'].severity)
@@ -242,20 +373,41 @@ class PeAnalyzer:
 		if self.peFile.has_configuration:
 			if self.peFile.load_configuration.security_cookie == 0:
 				score += int(indicators['1107'].severity)
-				str = constants.RED + "The file ignores cookies on the stack (GS)" + constants.RESET
-				table.add_row([str, indicators['1107'].severity])
+				str = "The file ignores cookies on the stack (GS)"
+				if not jsonDict is None:
+					jsonResults.append({"indicator": str, "severity" : indicators['1107'].severity})
+				elif not root is None:
+					indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+					indicatorXml.set("severity", indicators['1107'].severity)
+					indicatorXml.text = str
+				else:
+					table.add_row([constants.RED + str + constants.RESET, indicators['1107'].severity])
 			else:
 				score += int(indicators['1106'].severity)
-				str = constants.RED + "The file opts for cookies on the stack (GS)" + constants.RESET
-				table.add_row([str, indicators['1106'].severity])
+				str = "The file opts for cookies on the stack (GS)"
+				if not jsonDict is None:
+					jsonResults.append({"indicator": str, "severity" : indicators['1106'].severity})
+				elif not root is None:
+					indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+					indicatorXml.set("severity", indicators['1106'].severity)
+					indicatorXml.text = str
+				else:
+					table.add_row([constants.RED + str + constants.RESET, indicators['1106'].severity])
 		
 		# PE file does not use code integrity
 		maxScore += int(indicators['1109'].severity)
 		if self.peFile.has_configuration:
 			if isinstance(self.peFile.load_configuration, lief.PE.LoadConfigurationV2) and self.peFile.load_configuration.code_integrity.catalog == 0xFFFF:
 				score += int(indicators['1109'].severity)
-				str = constants.RED + "The file ignores Code Integrity" + constants.RESET
-				table.add_row([str, indicators['1109'].severity])
+				str = "The file ignores Code Integrity"
+				if not jsonDict is None:
+					jsonResults.append({"indicator": str, "severity" : indicators['1109'].severity})
+				elif not root is None:
+					indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+					indicatorXml.set("severity", indicators['1109'].severity)
+					indicatorXml.text = str
+				else:
+					table.add_row([constants.RED + str + constants.RESET, indicators['1109'].severity])
 			elif all:
 				print(constants.GREEN + "\tThe file opts for Code Integrity" + constants.RESET)
 
@@ -267,12 +419,26 @@ class PeAnalyzer:
 			dbg_file_name_lst = self.peFile.get_content_from_virtual_address(self.peFile.optional_header.imagebase + data_dir.rva, data_dir.size - 24)
 			dbg_file_name = "".join(chr(c) for c in dbg_file_name_lst)
 			score += int(indicators['1152'].severity)
-			str = constants.RED + "The file references a debug symbols file (path: %s)" % (dbg_file_name) + constants.RESET
-			table.add_row([str, indicators['1152'].severity])
+			str = "The file references a debug symbols file (path: %s)" % (dbg_file_name)
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1152'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1152'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1152'].severity])
 			if dbg_file_name.split(".")[-1] != ".pdb":
 				score += int(indicators['1153'].severity)
-				str = constants.RED + "The debug file name extension %s is suspicous" % (dbg_file_name.split(".")[-1]) + constants.RESET
-				table.add_row([str, indicators['1152'].severity])
+				str = "The debug file name extension %s is suspicous" % (dbg_file_name.split(".")[-1])
+				if not jsonDict is None:
+					jsonResults.append({"indicator": str, "severity" : indicators['1152'].severity})
+				elif not root is None:
+					indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+					indicatorXml.set("severity", indicators['1152'].severity)
+					indicatorXml.text = str
+				else:
+					table.add_row([constants.RED + str + constants.RESET, indicators['1152'].severity])
 		
 		# Suspicious debug timestamp
 		maxScore += int(indicators['1157'].severity)
@@ -280,8 +446,15 @@ class PeAnalyzer:
 			dbg_time = datetime.datetime.fromtimestamp(self.peFile.debug.timestamp)
 			if dbg_time > datetime.datetime.now(): # TODO: Check if there are more criteria
 				score += int(indicators['1157'].severity)
-				str = constants.RED + "The age (%s) of the debug file is suspicious" % (str(dbg_time)) + constants.RESET
-				table.add_row([str, indicators['1157'].severity])
+				str = "The age (%s) of the debug file is suspicious" % (str(dbg_time))
+				if not jsonDict is None:
+					jsonResults.append({"indicator": str, "severity" : indicators['1157'].severity})
+				elif not root is None:
+					indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+					indicatorXml.set("severity", indicators['1157'].severity)
+					indicatorXml.text = str
+				else:
+					table.add_row([constants.RED + str + constants.RESET, indicators['1157'].severity])
 		
 		# Check entropy of the sections, number of shared sections
 		min = int(mins.find('Entropy').text)
@@ -289,7 +462,7 @@ class PeAnalyzer:
 		sharedSect = 0
 		suspicious_entropies = 0
 		for sect in self.peFile.sections:
-			if not min < sect.entropy < max:
+			if (not min < sect.entropy < max) and jsonDict is None and root is None:
 				print(constants.RED + "\tThe entropy %d of section %s is suspicious" % (sect.entropy, sect.name) + constants.RESET)
 				suspicious_entropies += 1
 			if sect.has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_SHARED):
@@ -302,8 +475,15 @@ class PeAnalyzer:
 		maxScore += int(indicators['1213'].severity)
 		if not min <= sharedSect <= max:
 			score += int(indicators['1213'].severity)
-			str = constants.RED + "The shared section(s) (%d) reached the max (%d) threshold" % (sharedSect, max) + constants.RESET
-			table.add_row([str, indicators['1213'].severity])
+			str = "The shared section(s) (%d) reached the max (%d) threshold" % (sharedSect, max)
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1213'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1213'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1213'].severity])
 		elif all:
 			print(constants.GREEN + "\tShared section(s) (%d) below the max (%d) threshold" % (sharedSect, max) + constants.RESET)
 		
@@ -311,18 +491,32 @@ class PeAnalyzer:
 		maxScore += int(indicators['1223'].severity)
 		if list(self.peFile.sections)[0].has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_WRITE):
 			score += int(indicators['1223'].severity)
-			str = constants.RED + "The first section (name:%s) is writable" % (self.peFile.sections[0].name) + constants.RESET
-			table.add_row([str, indicators['1223'].severity])
+			str = "The first section (name:%s) is writable" % (self.peFile.sections[0].name)
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1223'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1223'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1223'].severity])
 		elif all:
 			print(constants.GREEN + "\tThe first section (name:%s) is not writable" % (self.peFile.sections[0].name) + constants.RESET)
 		
 		maxScore += int(indicators['1222'].severity)
 		if list(self.peFile.sections)[-1].has_characteristic(lief.PE.SECTION_CHARACTERISTICS.MEM_EXECUTE):
 			score += int(indicators['1222'].severity)
-			str = constants.RED + "The last section (name:%s) is executable" % (self.peFile.sections[0].name) + constants.RESET
-			table.add_row([str, indicators['1222'].severity])
+			str = "The last section (name:%s) is executable" % (self.peFile.sections[-1].name) 
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1222'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1222'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1222'].severity])
 		elif all:
-			print(constants.GREEN + "\tThe last section (name:%s) is not executable" % (self.peFile.sections[0].name) + constants.RESET)
+			print(constants.GREEN + "\tThe last section (name:%s) is not executable" % (self.peFile.sections[-1].name) + constants.RESET)
 		
 		# Size of initialized data
 		min = int(mins.find('InitializedData').text)
@@ -330,8 +524,15 @@ class PeAnalyzer:
 		maxScore += int(indicators['1208'].severity)
 		if not min < self.peFile.optional_header.sizeof_initialized_data < max:
 			score += int(indicators['1208'].severity)
-			str = constants.RED + "The size of initialized data reached the max (%d bytes) threshold" % self.peFile.optional_header.sizeof_initialized_data + constants.RESET
-			table.add_row([str, indicators['1208'].severity])
+			str = "The size of initialized data reached the max (%d bytes) threshold" % self.peFile.optional_header.sizeof_initialized_data
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1208'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1208'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1208'].severity])
 		elif all:
 			print(constants.GREEN + "\tThe size of initialized data (%d bytes) is reasonable" % self.peFile.optional_header.sizeof_initialized_data + constants.RESET)
 	
@@ -350,8 +551,15 @@ class PeAnalyzer:
 		maxScore += int(indicators['2246'].severity) # Same as 1246
 		if not int(mins.find('ExecutableSections').text) <= exe_sections <= int(maxs.find('ExecutableSections').text):
 			score += int(indicators['2246'].severity)
-			str = constants.RED + "The executable has %d executable sections" % exe_sections + constants.RESET
-			table.add_row([str, indicators['2246'].severity])
+			str = "The executable has %d executable sections" % exe_sections
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['2246'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['2246'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['2246'].severity])
 		elif all:
 			print(constants.GREEN + "\tThe executable has %d executable sections" % exe_sections + constants.RESET)
 	
@@ -364,8 +572,15 @@ class PeAnalyzer:
 		
 		if count_exe_write_sec > 0:
 			score += int(indicators['2215'].severity)
-			str = constants.RED + "The executable has section(s) that are both executable and writable" + constants.RESET
-			table.add_row([str, indicators['2215'].severity])	
+			str = "The executable has section(s) that are both executable and writable"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['2215'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['2215'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['2215'].severity])	
 		elif all:
 			print(constants.GREEN + "\tThe executable has %d section(s) that is/are both executable and writable" % count_exe_write_sec + constants.RESET)
 		
@@ -383,8 +598,15 @@ class PeAnalyzer:
 		maxScore += int(indicators['1637'].severity)
 		if not (int(mins.find('Passwords').text) <= password_checks <= int(maxs.find('Passwords').text)):
 			score += int(indicators['1637'].severity)
-			str = constants.RED + "The executable contains %d default passwords." % password_checks + constants.RESET
-			table.add_row([str, indicators['1637'].severity])
+			str = "The executable contains %d default passwords." % password_checks
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1637'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1637'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1637'].severity])
 		elif all:
 			print(constants.GREEN + "\tThe executable contains %d default passwords." % password_checks + constants.RESET)
 		
@@ -392,8 +614,17 @@ class PeAnalyzer:
 		maxScore += int(indicators['1121'].severity)
 		if "Delphi" in self.strings:
 			score += int(indicators['1121'].severity)
-			str = constants.RED + "The file has been compiled with Delphi" + constants.RESET
-			table.add_row([str, indicators['1121'].severity])
+			str = "The file has been compiled with Delphi"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1121'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1121'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1121'].severity])
+		elif all:
+			print(constants.GREEN + "\t The file has not been compiled with Delphi" + constants.RESET)
 		
 		# Size of code greater than size of code section
 		code_sec_size = 0
@@ -404,16 +635,23 @@ class PeAnalyzer:
 		maxScore += int(indicators['1623'].severity)
 		if self.peFile.optional_header.sizeof_code > code_sec_size:
 			score += int(indicators['1623'].severity)
-			str = constants.RED + "The size of code (%i bytes) is bigger than the size (%i bytes) of code sections" % (self.peFile.optional_header.sizeof_code, code_sec_size) + constants.RESET
-			table.add_row([str, indicators['1623'].severity])		
+			str = "The size of code (%i bytes) is bigger than the size (%i bytes) of code sections" % (self.peFile.optional_header.sizeof_code, code_sec_size)
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1623'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1623'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1623'].severity])		
 		elif all:
 			print(constants.GREEN + "\tThe size of code (%i bytes) matches the size of code sections" % self.peFile.optional_header.sizeof_code)
 		
 		# Suspicious section names
-		standardSectionNames = [".text", ".bss", ".rdata", ".data", ".idata", ".reloc"]
+		standardSectionNames = [".text", ".bss", ".rdata", ".data", ".idata", ".reloc", ".rsrc"]
 		suspiciousSections = 0
 		for section in self.peFile.sections:
-			if not section.name in standardSectionNames:
+			if not section.name in standardSectionNames and jsonDict is None and root is None:
 				print(constants.RED + "\tSuspicious section name %s" % (section.name) + constants.RESET)
 				suspiciousSections += 1
 		
@@ -422,15 +660,29 @@ class PeAnalyzer:
 		maxScore += int(indicators['2248'].severity)
 		if not min <= suspiciousSections < max:
 			score += int(indicators['2248'].severity)
-			str = constants.RED + "The file has (%i) blacklisted section name(s)" % suspiciousSections + constants.RESET
-			table.add_row([str, indicators['2248'].severity])
+			str = "The file has (%i) blacklisted section name(s)" % suspiciousSections
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['2248'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['2248'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['2248'].severity])
 		
 		# Missing DOS-Stub
 		maxScore += int(indicators['1260'].severity)
 		if len(self.peFile.dos_stub) == 0:
 			score += int(indicators['1260'].severity)
-			str = constants.RED + "The dos-stub is missing" + constants.RESET
-			table.add_row([str, indicators['1260'].severity])
+			str = "The dos-stub is missing"
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1260'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1260'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1260'].severity])
 		elif all:
 			print(constants.GREEN + "\tThe dos-stub is present" + constants.RESET)
 
@@ -440,10 +692,17 @@ class PeAnalyzer:
 		antiDbgFunctions = len(self.getAntiDebugFcts())
 		
 		maxScore += int(indicators['2270'].severity) # Same as 1270
-		if not ( min <= antiDbgFunctions <= max ):
+		if not (min <= antiDbgFunctions <= max):
 			score += int(indicators['2270'].severity)
-			str = constants.RED + "The file imports (%d) antidebug function(s)" % antiDbgFunctions + constants.RESET
-			table.add_row([str, indicators['2270'].severity])
+			str = "The file imports (%d) antidebug function(s)" % antiDbgFunctions
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['2270'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['2270'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['2270'].severity])
 		elif all:
 			print(constants.GREEN + "\tThe file imports (%d) antidebug function(s), less than min threshold (%d)" % (antiDbgFunctions, min) + constants.RESET)
 		
@@ -453,16 +712,34 @@ class PeAnalyzer:
 		maxScore += int(indicators['1635'].severity)
 		if len(keyboardFcts) > 0:
 			score += int(indicators['1635'].severity)
-			str = constants.RED + "The file references (%i) keyboard functions" % len(keyboardFcts) + constants.RESET
-			table.add_row([str, indicators['1635'].severity])
+			str = "The file references (%i) keyboard functions" % len(keyboardFcts)
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1635'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1635'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1635'].severity])
 		if keys > 0:
 			score += int(indicators['1635'].severity)
-			str = constants.RED + "The file references (%i) keyboard keys like a Keylogger" % keys + constants.RESET
-			table.add_row([str, indicators['1635'].severity])
+			str = "The file references (%i) keyboard keys like a Keylogger" % keys
+			if not jsonDict is None:
+				jsonResults.append({"indicator": str, "severity" : indicators['1635'].severity})
+			elif not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "indicator")
+				indicatorXml.set("severity", indicators['1635'].severity)
+				indicatorXml.text = str
+			else:
+				table.add_row([constants.RED + str + constants.RESET, indicators['1635'].severity])
 		if all and not (len(keyboardFcts) > 0 or keys > 0):
 			print(constants.GREEN + "\tThe file does not references keyboard keys or functions" + constants.RESET)
 			
-		return score, maxScore
+		if not jsonDict is None:
+			jsonDict["indicators"] = {}
+			jsonDict["indicators"]["indicators"] = jsonResults
+			
+		return score, maxScore, jsonDict, root
 	
 	def getKeyboardFcts(self):
 		if self.imports is None:
@@ -512,16 +789,27 @@ class PeAnalyzer:
 		antiDbgFunctions += f
 		return antiDbgFunctions
 		
-	def checkFeatures(self, indicators, score, maxScore, table):
+	def checkFeatures(self, indicators, score, maxScore, table = None, jsonDict = None, root = None):
 		if self.imports is None:
 			self.__getImports()
+		
+		jsonResults = []
+		if not root is None:
+			indicatorsXml = ET.SubElement(root, "indicators")
+			indicatorsXml = root.find("indicators")
 		
 		maxScore += int(indicators['1265'].severity)
 		if not self.checkImportNumber():
 			score += int(indicators['1265'].severity)
 			str = constants.RED + "The count (%d) of imports is suspicious" % len(self.imports) + constants.RESET
-			table.add_row([str, indicators['1265'].severity])
-		
+			if not table is None:
+				table.add_row([str, indicators['1265'].severity])
+			if not jsonDict is None:
+				jsonResults.append({"indicator": "The count (%d) of imports is suspicious" % len(self.imports), "severity": indicators['1265'].severity})
+			if not root is None:
+				indicatorXml = ET.SubElement(indicatorsXml, "function")
+				indicatorXml.set("severity", indicators['1265'].severity)
+				indicatorXml.text = "The count (%d) of imports is suspicious" % len(self.imports)	
 		
 		featureSet = set()
 		# TODO: we can also print it as table with the severity (and sum up the severity over all things)
@@ -540,9 +828,19 @@ class PeAnalyzer:
 			if k in featureSet and indicator.enable == "1":
 				score += int(indicator.severity)
 				str = constants.RED + indicator.text + constants.RESET
-				table.add_row([str, indicator.severity])
+				if not table is None:
+					table.add_row([str, indicator.severity])
+				if not jsonDict is None:
+					jsonResults.append({"indicator": str, "severity": indicator.severity})
+				if not root is None:
+					indicatorXml = ET.SubElement(indicatorsXml, "function")
+					indicatorXml.set("severity", indicator.severity)
+					indicatorXml.text = indicator.text
 		
-		return score, maxScore
+		if not jsonDict is None:
+			jsonDict["indicators"]["functions"] = jsonResults
+		
+		return score, maxScore, jsonDict, root
 	
 	def __getImports(self):
 		self.imports = []
