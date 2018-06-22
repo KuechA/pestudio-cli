@@ -10,6 +10,7 @@ Our goal is the implementation of a python-based command-line tool which can be 
 * Show various information and highlight anomalies about the PE file like the PE header (time date stamp in the future), TLS callbacks or the relocations
 * Check the presence of more than 100 features in the PE file.
 * On top, we check various suspicious values, among others a high entropy, known imphashes, anomalies of the entry-point address, sections, headers, data, ...
+* Include support for yara rules by calling the yara-python library (if installed)
 
 We support multiple output formats and make the output result highly configurable:
 * Many options can be used to specify which analysis should be performed
@@ -22,3 +23,4 @@ We support multiple output formats and make the output result highly configurabl
 * prettytable python library: `pip3 install prettytable`
 * LIEF to parse the PE file `pip3 install setuptools --upgrade; pip3 install lief`
 * In case files should be submitted to VirusTotal in order to retrieve their score, a [VirusTotal API key](https://www.virustotal.com/en/documentation/public-api/#getting-started) has to be stored in the file `VirusTotalApiKey` in the root of the directory.
+* In order to use the functionality to check the file against [yara](https://virustotal.github.io/yara/) signatures, yara-python is required: `pip3 install yara-python`. Therefore, an installation of yara is required

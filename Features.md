@@ -18,6 +18,7 @@
 | Show blacklisted strings in the file by group | Yes | Yes |
 | XML output of results | Yes | Yes |
 | JSON output of results | No | Yes |
+| Yara support for more rules | No | Yes |
 
 
 ### Indicators
@@ -412,6 +413,7 @@ What we support:
 * Various command line options to specify the output
 * Show TLS callbacks
 * Show relocations
+* Check file against yara rules
 
 Main missing features:
 * Extracting resources and analyzing them further

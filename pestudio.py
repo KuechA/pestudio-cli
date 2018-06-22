@@ -219,8 +219,28 @@ def interactiveMode(file = None):
 					peAnalyzer = PeAnalyzer(file)
 					matcher = SignatureMatcher(file)
 					vt = VirusTotalClient(file)
-		elif user_in != "help" and peAnalyzer is None:
-			print("Select a file first")
+		elif user_in.startswith("yara ") or user_in.startswith("y "):
+			try:
+				import yara
+			except ImportError:
+				print('yara-python is not installed, see http://code.google.com/p/yara-project/')
+				continue
+			
+			args = user_in.split(" ")
+			if len(args) > 2:
+				print("Please use the command only with one argument: yara|y <rule-file>")
+			else:
+				yarafile = args[1]
+				yarafile = yarafile.replace("~", os.path.expanduser("~"))
+				if not os.path.isfile(yarafile):
+					print(constants.BLUE + "Could not find the specified file %s" % yarafile + constants.RESET)
+				else:
+					rules = yara.compile(filepath=yarafile)
+					matches = rules.match(file)
+					if matches != []:
+						print(constants.RED + "Yara found the following %d matches:" % len(matches) + constants.RESET)
+					for match in matches:
+						print(constants.RED + "\t" + str(match) + constants.RESET)
 		elif user_in == "header" or user_in == "h":
 			print("Printing header")
 			peAnalyzer.printHeaderInformation()
