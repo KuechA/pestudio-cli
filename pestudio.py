@@ -37,6 +37,7 @@ def parseCommandLineArguments():
 	parser.add_argument("-x", "--xml", help="Format output as xml.", action="store_true", dest="xml")
 	parser.add_argument("-j", "--json", help="Format output as JSON.", action="store_true", dest="json")
 	parser.add_argument("--interactive", help="Use the tool in interactive mode.", action="store_true", dest="interactive")
+	parser.add_argument("-d", "--dump_resources", help="Dump every resource to a file (with name or ID as filename) in folder ./resources.", action="store_true", dest="dumpRes")
 	return parser.parse_args()
 
 def parseIndicators():
@@ -265,6 +266,8 @@ def interactiveMode(file = None):
 			pydoc.pager(peAnalyzer.printAllStrings())
 		elif user_in == "strings -b":
 			peAnalyzer.getBlacklistedStrings()
+		elif user_in == "dump_resources" or user_in == "d":
+			peAnalyzer.dumpResourcesToFile()
 		elif user_in == "signatures" or user_in == "s":
 			packers = matcher.findPackers()
 			if len(packers):
@@ -288,6 +291,7 @@ def interactiveMode(file = None):
 			print("\ti/imports - show imports of the PE file")
 			print("\te/exports - show exports of the PE file")
 			print("\tr/resources - show resources of the PE file")
+			print("\td/dump_resources - Dump every resource to a file in folder ./resources/ with resource ID or resource name as filename ")
 			print("\tt/tlsCallbacks - show TLS callback addresses of the PE file")
 			print("\trelocations - show relocation table of the PE file")
 			print("\ts/signatures - find signatures of malicious patterns or packers in the PE file")
@@ -393,6 +397,9 @@ def checkFile(args):
 			# TODO: Check resource types and corresponding thresholds in thresholds.xml
 			
 			peAnalyzer.showAllResources()
+	
+	if args.dumpRes:
+		peAnalyzer.dumpResourcesToFile()
 	
 	if args.strings:
 		if args.xml:

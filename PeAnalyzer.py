@@ -8,6 +8,7 @@ import datetime
 import constants
 import re
 import string
+import os
 
 class Import:
 	def __init__(self, lib, fct):
@@ -20,11 +21,12 @@ class Import:
 		return self.lib + ": " + self.fct + ", blacklisted: " + str(self.blacklisted) + " with group: " + str(self.group)
 
 class Resource:
-	def __init__(self, type, name, language, md5):
+	def __init__(self, type, name, language, md5, content):
 		self.type = type
 		self.name = name
 		self.language = language
 		self.md5 = md5
+		self.content = content
 		
 	def __str__(self):
 		return str(self.name) + " of type " + str(self.type) + ", language " + str(self.language) + " has md5 " + str(self.md5)
@@ -977,7 +979,7 @@ class PeAnalyzer:
 					for lang in resource.childs:
 						name = resource.name if resource.has_name else hex(resource.id)
 						md5 = hashlib.md5(bytes(lang.content))
-						self.resources.append(Resource(resourceType.id, name, lang.id, md5))
+						self.resources.append(Resource(resourceType.id, name, lang.id, md5, bytes(lang.content)))
 		
 		return self.resources
 
@@ -1085,6 +1087,16 @@ class PeAnalyzer:
 		
 		resultString = str(re.sub(r'(^|\n)', r'\1\t', str(table)))
 		print(resultString)
+	
+	def dumpResourcesToFile(self):
+		if self.resources is None:
+			self.__getResources()
+		
+		os.makedirs("./resources", exist_ok=True)
+		
+		for resource in self.resources:
+			resFile = open("./resources/" + resource.name, "wb")
+			resFile.write(resource.content)
 
 	def addHeaderInformationXml(self, root):
 		header = ET.SubElement(root, "FileHeader")

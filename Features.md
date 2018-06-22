@@ -414,6 +414,7 @@ What we support:
 * Show TLS callbacks
 * Show relocations
 * Check file against yara rules
+* Extract resources and save them in a file in order to allow further analysis (the analysis is not implemented)
 
 Main missing features:
 * Extracting resources and analyzing them further
