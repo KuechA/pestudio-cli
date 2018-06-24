@@ -1252,6 +1252,7 @@ class PeAnalyzer:
 			url = GRUBER_URLINTEXT_PAT.findall(s)
 			if len(url) > 0:
 				urls.append(url[0][0])
+		# TODO: We would have to check the URLs against a database (e.g. VirusTotal, Google Safe Browsing, ...)
 		return urls
 	
 	def getBlacklistedStrings(self, printToConsole = True):
