@@ -35,6 +35,7 @@ def parseCommandLineArguments():
 	parser.add_argument("--relocations", help="Show the relocations.", action="store_true", dest="relocations")
 	parser.add_argument("-s", "--signatures", help="Check for known signatures (e.g. packers).", action="store_true", dest="signatures")
 	parser.add_argument("--strings", help="Check the strings in the PE file.", action="store_true", dest="strings")
+	parser.add_argument("-u", "--urls", help="List all URLs found in the PE file", action="store_true", dest="urls")
 	parser.add_argument("-x", "--xml", help="Format output as xml.", action="store_true", dest="xml")
 	parser.add_argument("-j", "--json", help="Format output as JSON.", action="store_true", dest="json")
 	parser.add_argument("--interactive", help="Use the tool in interactive mode.", action="store_true", dest="interactive")
@@ -230,7 +231,14 @@ def interactiveMode(file = None):
 	print("Entering interactive mode...")
 	if file is None:
 		print("Please specify file to analyze or type help")
-	
+	else:
+		file = file.replace("~", os.path.expanduser("~"))
+		if not os.path.isfile(file):
+			print(constants.BLUE + "Could not find the specified file %s" % file + constants.RESET)
+		else:
+			peAnalyzer = PeAnalyzer(file)
+			matcher = SignatureMatcher(file)
+			vt = VirusTotalClient(file)
 	
 	def complete(text, state):
 		text = text.replace("~", os.path.expanduser("~"))
@@ -309,6 +317,14 @@ def interactiveMode(file = None):
 			collectIndicators(vt, peAnalyzer, matcher)
 		elif user_in == "indicators -a":
 			collectIndicators(vt, peAnalyzer, matcher, all)
+		elif user_in == "urls" or user_in == "u":
+			urls = peAnalyzer.findURLS()
+			if len(urls) > 0:
+				print("The following (maybe non-malicious) URLs have been found:")
+				for url in urls:
+					print("\t" + url)
+			else:
+				print("No URL found in the file's strings")
 		else:
 			if user_in != "help":
 				print("Command '" + user_in + "' is unknown.")
@@ -329,6 +345,7 @@ def interactiveMode(file = None):
 			print("\tsections - show all sections in the file")
 			print("\tstrings -a - show all strings we can find in the PE file")
 			print("\tstrings -b - show blacklisted strings we can find in the PE file")
+			print("\tu/urls - list all URLs found in the PE file")
 			print("\thelp - print this help text")
 		
 		no_user_in = True
@@ -454,6 +471,22 @@ def checkFile(args):
 				print(constants.RED + "The signature of the following packer was found: " + str(packers) + constants.RESET)
 			else:
 				print(constants.GREEN + "No packer signature was found in the PE file" + constants.RESET)
+	
+	if args.urls:
+		urls = peAnalyzer.findURLS()
+		if args.xml:
+			urlsXml = ET.SubElement(root, "URLs")
+			for url in urls:
+				ET.SubElement(urlsXml, "url").text = url
+		elif args.json:
+			jsonDict["URLs"] = urls
+		else:
+			if len(urls) > 0:
+				print("The following (maybe non-malicious) URLs have been found:")
+				for url in urls:
+					print("\t" + url)
+			else:
+				print("No URL found in the file's strings")
 	
 	if not args.yara is None:
 		if args.xml:

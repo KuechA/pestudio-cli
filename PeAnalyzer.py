@@ -1241,6 +1241,19 @@ class PeAnalyzer:
 						self.strings.add(s)
 					s = ""
 	
+	def findURLS(self):
+		if self.strings is None:
+			self.searchAllStrings()
+		
+		# Adapted from https://gist.github.com/uogbuji/705383
+		GRUBER_URLINTEXT_PAT = re.compile(r'(?i)\b((?:(https?|ftp|mailto|file|data|irc)://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:\'".,<>?\xab\xbb\u201c\u201d\u2018\u2019]))')
+		urls = []
+		for s in self.strings:
+			url = GRUBER_URLINTEXT_PAT.findall(s)
+			if len(url) > 0:
+				urls.append(url[0][0])
+		return urls
+	
 	def getBlacklistedStrings(self, printToConsole = True):
 		if self.strings is None:
 			self.searchAllStrings()
