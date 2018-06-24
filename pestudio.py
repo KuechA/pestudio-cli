@@ -24,6 +24,7 @@ class Indicator:
 def parseCommandLineArguments():
 	parser = argparse.ArgumentParser(description='PE file analyzer. The default output is human-readable and structured in tables. If no file is specifies, the interactive mode is entered.')
 	parser.add_argument("-f", "--file", help="The file to analyze", required=False, dest="file")
+	parser.add_argument("-y", "--yara", help="Use yara to check for more signatures. Use: --yara <yara-file>", required=False, dest="yara")
 	parser.add_argument("-v", "--virusTotal", help="Submit the file to virus total and get their score.", action="store_true", dest="virusTotal")
 	parser.add_argument("--header", help="Show information from header.", action="store_true", dest="header")
 	parser.add_argument("-t", "--tlsCallbacks", help="Show addresses of TLS callbacks.", action="store_true", dest="tls")
@@ -179,6 +180,49 @@ def collectIndicators(vt, peAnalyzer, matcher, all = False, root = None, jsonDic
 		print(table)
 	return jsonDict, root
 
+def checkYara(file, yarafile, root = None, jsonDict = None):
+	try:
+		import yara
+	except ImportError:
+		if root is None and jsonDict is None:
+			print(constants.BLUE + 'yara-python is not installed, see http://code.google.com/p/yara-project/' + constants.RESET)
+			return
+		elif root is None:
+			jsonDict["YaraResult"] = 'yara-python is not installed, see http://code.google.com/p/yara-project/'
+			return jsonDict
+		else:
+			yaraXml = ET.SubElement(root, "YaraResult")
+			yaraXml.text = 'yara-python is not installed, see http://code.google.com/p/yara-project/'
+			return root
+	
+	if not os.path.isfile(yarafile):
+		if root is None and jsonDict is None:
+			print(constants.BLUE + "Could not find the specified file %s" % yarafile + constants.RESET)
+		elif root is None:
+			jsonDict["YaraResult"] = "Could not find the specified file %s" % yarafile
+			return jsonDict
+		else:
+			yaraXml = ET.SubElement(root, "YaraResult")
+			yaraXml.text = "Could not find the specified file %s" % yarafile
+			return root
+	else:
+		rules = yara.compile(filepath=yarafile)
+		matches = rules.match(file)
+		
+		if root is None and jsonDict is None:
+			if matches != []:
+				print(constants.RED + "Yara found the following %d matches:" % len(matches) + constants.RESET)
+			for match in matches:
+				print(constants.RED + "\t" + str(match) + constants.RESET)
+		elif root is None:
+			jsonDict["YaraResult"] = [str(match) for match in matches]
+			return jsonDict
+		else:
+			yaraXml = ET.SubElement(root, "YaraResult")
+			for match in matches:
+				ET.SubElement(root, "match").text = str(match)
+			return root
+
 def interactiveMode(file = None):
 	peAnalyzer = None
 	matcher = None
@@ -221,27 +265,14 @@ def interactiveMode(file = None):
 					matcher = SignatureMatcher(file)
 					vt = VirusTotalClient(file)
 		elif user_in.startswith("yara ") or user_in.startswith("y "):
-			try:
-				import yara
-			except ImportError:
-				print('yara-python is not installed, see http://code.google.com/p/yara-project/')
-				continue
-			
-			args = user_in.split(" ")
-			if len(args) > 2:
-				print("Please use the command only with one argument: yara|y <rule-file>")
-			else:
-				yarafile = args[1]
-				yarafile = yarafile.replace("~", os.path.expanduser("~"))
-				if not os.path.isfile(yarafile):
-					print(constants.BLUE + "Could not find the specified file %s" % yarafile + constants.RESET)
+				args = user_in.split(" ")
+				if len(args) > 2:
+					print("Please use the command only with one argument: yara|y <rule-file>")
 				else:
-					rules = yara.compile(filepath=yarafile)
-					matches = rules.match(file)
-					if matches != []:
-						print(constants.RED + "Yara found the following %d matches:" % len(matches) + constants.RESET)
-					for match in matches:
-						print(constants.RED + "\t" + str(match) + constants.RESET)
+					yarafile = args[1]
+					yarafile = yarafile.replace("~", os.path.expanduser("~"))
+					checkYara(file, yarafile)
+
 		elif user_in == "header" or user_in == "h":
 			print("Printing header")
 			peAnalyzer.printHeaderInformation()
@@ -423,6 +454,14 @@ def checkFile(args):
 				print(constants.RED + "The signature of the following packer was found: " + str(packers) + constants.RESET)
 			else:
 				print(constants.GREEN + "No packer signature was found in the PE file" + constants.RESET)
+	
+	if not args.yara is None:
+		if args.xml:
+			root = checkYara(args.file, args.yara, root=root)
+		elif args.json:
+			jsonDict = checkYara(args.file, args.yara, jsonDict=jsonDict)
+		else:
+			checkYara(args.file, args.yara)
 	
 	if args.xml:
 		print(ET.tostring(root).decode('utf-8'))
